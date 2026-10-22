@@ -30,7 +30,8 @@ data class AppUsage(
     val duration: String,
     val initials: String,
     val color: Color,
-    val usageProgress: Float
+    val usageProgress: Float,
+    val packageName: String = ""
 )
 
 @Composable
@@ -64,7 +65,7 @@ fun AppUsageRow(
                     fontSize = 12.sp
                 )
             }
-            Spacer(modifier = modifier.width(12.dp))
+            Spacer(modifier = Modifier.width(12.dp))
             Column(
                 modifier = Modifier.weight(1f)
             ) {

@@ -17,12 +17,17 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -32,10 +37,34 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import me.ankitgrai.kaizen.ui.components.CircularUsageIndicator
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.viewmodel.compose.viewModel
+import me.ankitgrai.kaizen.ui.components.AppUsage
 import me.ankitgrai.kaizen.ui.theme.KaizenTheme
+import me.ankitgrai.kaizen.viewmodel.UsageViewModel
 
 @Composable
 fun OverviewScreen() {
+    val usageViewModel: UsageViewModel = viewModel()
+    val uiState by usageViewModel.uiState.collectAsState()
+
+    val lifecycleOwner  = LocalLifecycleOwner.current
+
+    DisposableEffect(lifecycleOwner,usageViewModel) {
+        val observer = LifecycleEventObserver{_, event ->
+            if(event == Lifecycle.Event.ON_RESUME){
+                usageViewModel.refresh()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
+
+
 
         Column(
             modifier = Modifier
@@ -66,7 +95,18 @@ fun OverviewScreen() {
             }
             Spacer(modifier = Modifier.height(12.dp))
 
-            UsageSummary()
+            UsageSummary(
+                totalUsageMillis = uiState.totalUsageMills,
+                isLoading = uiState.isLoading,
+                hasUsageAccess = uiState.hasUsageAccess,
+                error = uiState.error,
+                onGrantAccess = {
+                    usageViewModel.openUsageAccessSettings()
+                },
+                onRefresh = {
+                    usageViewModel.refresh()
+                }
+            )
 
             // Weekly chart
             WeeklyUsageCard()
@@ -86,14 +126,59 @@ fun OverviewScreen() {
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+                when {
+                    !uiState.hasUsageAccess ->{
+                        Text(
+                            text = "Grant usage access to see your applications.",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
 
-                AppUsageList()
+                    uiState.isLoading ->{
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(28.dp),
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                    uiState.error != null ->{
+                        Text(
+                            text = uiState.error ?: "Unable to load usage data.",
+                            color = MaterialTheme.colorScheme.error
+                        )
+
+                        Button(onClick = {
+                            usageViewModel.refresh()
+                        }) {
+                            Text("Retry")
+                        }
+                    }
+                    uiState.apps.isEmpty() -> {
+                        Text(
+                            text = "No application usage recorded yet.",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    else ->{
+                        AppUsageList(
+                            apps = uiState.apps.take(5)
+                        )
+                    }
+                }
+
             }
         }
     }
 
 @Composable
-fun UsageSummary(){
+fun UsageSummary(
+    totalUsageMillis:Long,
+    isLoading: Boolean,
+    hasUsageAccess: Boolean,
+    error: String?,
+    onGrantAccess:() -> Unit,
+    onRefresh:() -> Unit
+){
     Row(
         modifier = Modifier.fillMaxWidth()
             .padding(16.dp),
@@ -108,18 +193,56 @@ fun UsageSummary(){
                 style  = MaterialTheme.typography.bodySmall,
                 fontWeight = FontWeight.Bold
             )
-            Text(
-                text = "4h 38m",
-                style = MaterialTheme.typography.headlineLarge,
-                fontWeight = FontWeight.ExtraBold
+            when{
+                !hasUsageAccess ->{
+                    Text(
+                        text = "Access required",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Button(onClick = onGrantAccess){
+                        Text("Grant access")
+                    }
+                }
+                isLoading ->{
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(28.dp),
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+                error != null ->{
+                    Text(
+                        text = "Unable to load usage",
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                    Button(onClick = onRefresh) {
+                        Text("Retry")
+                    }
+                }
+                else ->{
+                    val totalMinutes = totalUsageMillis/60_000L
+                    val hours = totalMinutes/60
+                    val minutes = totalMinutes % 60
+
+                    Text(
+                        text = "${hours}h ${minutes}m",
+                        style = MaterialTheme.typography.headlineLarge,
+                        fontWeight = FontWeight.ExtraBold
+                    )
+                }
+            }
+        }
+        if(hasUsageAccess && !isLoading && error == null){
+            CircularUsageIndicator(
+                size = 90.dp,
+                strokeWidth = 12.dp,
+                color = Color(0xFFB8F28B),
+                progress = (
+                        totalUsageMillis.toFloat() / (6* 60  * 60 * 1000f)
+                        ).coerceIn(0f,1f)
             )
         }
-        CircularUsageIndicator(
-            size = 90.dp,
-            strokeWidth = 12.dp,
-            color = Color(0xFFB8F28B),
-            progress = 0.77f
-        )
+
     }
 }
 
@@ -233,50 +356,8 @@ fun WeeklyUsageCard() {
 }
 
 @Composable
-fun AppUsageList() {
-    data class AppItem(
-        val name: String,
-        val category: String,
-        val duration: String,
-        val initials: String,
-        val progress: Float,
-        val tint: Color
-    )
+fun AppUsageList(apps: List<AppUsage>) {
 
-    val apps = listOf(
-        AppItem(
-            name = "YouTube",
-            category = "Entertainment",
-            duration = "1h 42m",
-            initials = "YT",
-            progress = 1f,
-            tint = Color(0xFFFF8178)
-        ),
-        AppItem(
-            name = "Instagram",
-            category = "Social",
-            duration = "58m",
-            initials = "IG",
-            progress = 0.57f,
-            tint = Color(0xFFE6A0CF)
-        ),
-        AppItem(
-            name = "Chrome",
-            category = "Productivity",
-            duration = "42m",
-            initials = "CH",
-            progress = 0.41f,
-            tint = Color(0xFF8CB8FF)
-        ),
-        AppItem(
-            name = "Spotify",
-            category = "Music",
-            duration = "31m",
-            initials = "SP",
-            progress = 0.30f,
-            tint = Color(0xFFB8F28B)
-        )
-    )
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -301,10 +382,9 @@ fun AppUsageList() {
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-
                         Surface(
                             shape = RoundedCornerShape(14.dp),
-                            color = app.tint.copy(alpha = 0.15f)
+                            color = app.color.copy(alpha = 0.15f)
                         ) {
                             Box(
                                 modifier = Modifier.size(48.dp),
@@ -312,7 +392,7 @@ fun AppUsageList() {
                             ) {
                                 Text(
                                     text = app.initials,
-                                    color = app.tint,
+                                    color = app.color,
                                     fontWeight = FontWeight.Bold,
                                     style = MaterialTheme.typography.titleSmall
                                 )
@@ -349,8 +429,8 @@ fun AppUsageList() {
                     Spacer(modifier = Modifier.height(12.dp))
 
                     UsageProgress(
-                        progress = app.progress,
-                        color = app.tint,
+                        progress = app.usageProgress,
+                        color = app.color,
                         trackColor = MaterialTheme.colorScheme.surfaceVariant
                     )
                 }
