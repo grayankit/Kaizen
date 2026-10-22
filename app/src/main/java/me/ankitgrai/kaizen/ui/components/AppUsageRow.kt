@@ -51,20 +51,12 @@ fun AppUsageRow(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Box(
-                modifier = Modifier
-                    .size(44.dp)
-                    .clip(RoundedCornerShape(13.dp))
-                    .background(iconBackground),
-                contentAlignment = Alignment.Center
-            ){
-                Text(
-                    text = app.initials,
-                    color = app.color,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 12.sp
-                )
-            }
+            AppIcon(
+                packageName = app.packageName,
+                initials = app.initials,
+                color = app.color,
+                size = 44.dp
+            )
             Spacer(modifier = Modifier.width(12.dp))
             Column(
                 modifier = Modifier.weight(1f)

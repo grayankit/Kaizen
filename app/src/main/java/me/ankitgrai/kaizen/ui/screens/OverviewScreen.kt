@@ -41,6 +41,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
+import me.ankitgrai.kaizen.ui.components.AppIcon
 import me.ankitgrai.kaizen.ui.components.AppUsage
 import me.ankitgrai.kaizen.ui.theme.KaizenTheme
 import me.ankitgrai.kaizen.viewmodel.UsageViewModel
@@ -386,17 +387,12 @@ fun AppUsageList(apps: List<AppUsage>) {
                             shape = RoundedCornerShape(14.dp),
                             color = app.color.copy(alpha = 0.15f)
                         ) {
-                            Box(
-                                modifier = Modifier.size(48.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = app.initials,
-                                    color = app.color,
-                                    fontWeight = FontWeight.Bold,
-                                    style = MaterialTheme.typography.titleSmall
-                                )
-                            }
+                            AppIcon(
+                                packageName = app.packageName,
+                                initials = app.initials,
+                                color = app.color,
+                                size = 48.dp
+                            )
                         }
 
                         Spacer(modifier = Modifier.width(12.dp))
