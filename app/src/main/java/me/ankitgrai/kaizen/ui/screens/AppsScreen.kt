@@ -12,57 +12,21 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.viewmodel.compose.viewModel
 import me.ankitgrai.kaizen.ui.components.AppSearchBar
-import me.ankitgrai.kaizen.ui.components.AppUsage
 import me.ankitgrai.kaizen.ui.components.AppUsageRow
 import me.ankitgrai.kaizen.ui.components.CategoryFilter
 import me.ankitgrai.kaizen.ui.theme.KaizenTheme
+import me.ankitgrai.kaizen.viewmodel.UsageViewModel
 
-private val SampleApps = listOf(
-    AppUsage(
-        name = "YouTube",
-        category = "Video · Entertainment",
-        duration = "1h 42m",
-        initials = "YT",
-        color = Color(0xFFF28B9B),
-        usageProgress = 1f
-    ),
-    AppUsage(
-        name = "Instagram",
-        category = "Social",
-        duration = "58m",
-        initials = "IG",
-        color = Color(0xFFC49BFF),
-        usageProgress = 0.57f
-    ),
-    AppUsage(
-        name = "Chrome",
-        category = "Web browser",
-        duration = "42m",
-        initials = "CH",
-        color = Color(0xFF8CB8FF),
-        usageProgress = 0.41f
-    ),
-    AppUsage(
-        name = "Spotify",
-        category = "Music",
-        duration = "31m",
-        initials = "SP",
-        color = Color(0xFFA6D989),
-        usageProgress = 0.30f
-    ),
-    AppUsage(
-        name = "Discord",
-        category = "Social",
-        duration = "19m",
-        initials = "DC",
-        color = Color(0xFF9C9FFF),
-        usageProgress = 0.19f
-    )
-)
 
 @Composable
-fun AppsScreen() {
+fun AppsScreen(
+    usageViewModel: UsageViewModel = viewModel()
+) {
     var searchQuery by remember {
         mutableStateOf("")
     }
@@ -70,23 +34,43 @@ fun AppsScreen() {
     var selectedCategory by remember {
         mutableStateOf("All")
     }
+    val uiState by usageViewModel.uiState.collectAsState()
+    val lifecycleOwner = LocalLifecycleOwner.current
 
-    val filteredApps = SampleApps.filter { app ->
-        val matchesSearch = app.name.contains(
-            searchQuery,
-            ignoreCase = true
-        )
-
-        val matchesCategory = when (selectedCategory) {
-            "All" -> true
-            "Social" -> app.category == "Social"
-            "Video" -> app.category.startsWith("Video")
-            "Work" -> app.category == "Work"
-            "Music" -> app.category == "Music"
-            else -> true
+    DisposableEffect(lifecycleOwner, usageViewModel) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                usageViewModel.refresh()
+            }
         }
 
-        matchesSearch && matchesCategory
+        lifecycleOwner.lifecycle.addObserver(observer)
+
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
+
+    val filteredApps = remember(
+        uiState.installedApps,
+        searchQuery,
+        selectedCategory
+    ) {
+        uiState.installedApps.filter { app ->
+            val matchesSearch = app.name.contains(
+                searchQuery,
+                ignoreCase = true
+            )
+            val matchesCategory = when(selectedCategory) {
+                "All" -> true
+                "Social" -> app.category == "Social"
+                "Video" -> app.category.startsWith("Video")
+                "Work" -> app.category == "Work"
+                "Music" -> app.category == "Music"
+                else -> true
+            }
+            matchesSearch && matchesCategory
+        }
     }
 
     Column(
@@ -113,7 +97,12 @@ fun AppsScreen() {
             )
         }
 
-        UsageSummaryCard()
+        UsageSummaryCard(
+            totalUsageMillis = uiState.totalUsageMills,
+            appsUsed = uiState.installedApps.count{
+                it.duration != "0m"
+            }
+        )
 
         AppSearchBar(
             query = searchQuery,
@@ -167,7 +156,15 @@ fun AppsScreen() {
 }
 
 @Composable
-private fun UsageSummaryCard() {
+private fun UsageSummaryCard(
+    totalUsageMillis: Long,
+    appsUsed: Int
+) {
+    val totalMinutes = totalUsageMillis / 60_000L
+    val hours = totalMinutes / 60
+    val minutes = totalMinutes % 60
+
+    val formattedUsage = "${hours}h ${minutes}m"
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -186,14 +183,14 @@ private fun UsageSummaryCard() {
             )
 
             Text(
-                text = "4h 38m",
+                text = formattedUsage,
                 color = Color(0xFFE6E6F0),
                 fontSize = 27.sp,
                 fontWeight = FontWeight.Bold
             )
 
             Text(
-                text = "12 apps used",
+                text = "$appsUsed apps used",
                 color = Color(0xFFA5A7B8),
                 fontSize = 11.sp
             )

@@ -34,93 +34,81 @@ class UsageStateDataSource (
     }
     fun getTodayUsage(): List<AppUsageInfo> {
         val zone = ZoneId.systemDefault()
-        val today = LocalDate.now(zone)
 
-        val startOfDay = today
+        val startOfDay = LocalDate.now()
             .atStartOfDay(zone)
             .toInstant()
             .toEpochMilli()
 
         val now = System.currentTimeMillis()
 
-        // Read events from before midnight so an activity that
-        // was already running can be handled correctly.
-        val queryStart = startOfDay - 24 * 60 * 60 * 1000L
+        val events = usageStatsManager.queryEvents(
+            startOfDay - 24 * 60 * 60 * 1000L,
+            now
+        ) ?: return emptyList()
 
-        val events = usageStatsManager.queryEvents(queryStart, now)
         val event = UsageEvents.Event()
+        val totals = mutableMapOf<String, Long>()
 
-        val activeSince = mutableMapOf<String, Long>()
-        val durations = mutableMapOf<String, Long>()
+        var screenOn = false
+        var resumedPackage: String? = null
+        var countingSince: Long? = null
 
+        fun addElapsed(until: Long) {
+            val since = countingSince ?: return
+            val pkg = resumedPackage ?: return
+            val from = maxOf(since, startOfDay)
+            val to = minOf(until, now)
+            if (to > from) {
+                totals[pkg] = (totals[pkg] ?: 0L) + (to - from)
+            }
+            countingSince = null
+        }
+
+        fun maybeStart(at: Long) {
+            if (screenOn && resumedPackage != null && countingSince == null) {
+                countingSince = at
+            }
+        }
         while (events.hasNextEvent()) {
             events.getNextEvent(event)
+            val time = event.timeStamp
 
-            val packageName = event.packageName ?: continue
-
-            val isForegroundEvent =
-                event.eventType == UsageEvents.Event.ACTIVITY_RESUMED
-
-            val isBackgroundEvent =
-                event.eventType == UsageEvents.Event.ACTIVITY_PAUSED ||
-                        event.eventType == UsageEvents.Event.ACTIVITY_STOPPED
-
-            when {
-                isForegroundEvent -> {
-                    // Close an earlier interval for this package if
-                    // another foreground event arrived unexpectedly.
-                    val previousStart = activeSince.put(
-                        packageName,
-                        event.timeStamp
-                    )
-
-                    if (previousStart != null) {
-                        val intervalStart = maxOf(previousStart, startOfDay)
-                        val intervalEnd = minOf(event.timeStamp, now)
-
-                        if (intervalEnd > intervalStart) {
-                            durations[packageName] =
-                                (durations[packageName] ?: 0L) +
-                                        (intervalEnd - intervalStart)
-                        }
-                    }
+            when (event.eventType) {
+                UsageEvents.Event.SCREEN_INTERACTIVE -> {
+                    screenOn = true
+                    maybeStart(time)
                 }
 
-                isBackgroundEvent -> {
-                    val previousStart = activeSince.remove(packageName)
+                UsageEvents.Event.SCREEN_NON_INTERACTIVE -> {
+                    addElapsed(time)
+                    screenOn = false
+                }
 
-                    if (previousStart != null) {
-                        val intervalStart = maxOf(previousStart, startOfDay)
-                        val intervalEnd = minOf(event.timeStamp, now)
+                UsageEvents.Event.ACTIVITY_RESUMED -> {
+                    addElapsed(time)
+                    resumedPackage = event.packageName
+                    maybeStart(time)
+                }
 
-                        if (intervalEnd > intervalStart) {
-                            durations[packageName] =
-                                (durations[packageName] ?: 0L) +
-                                        (intervalEnd - intervalStart)
-                        }
+                UsageEvents.Event.ACTIVITY_PAUSED,
+                UsageEvents.Event.ACTIVITY_STOPPED -> {
+                    if (event.packageName == resumedPackage) {
+                        addElapsed(time)
+                        resumedPackage = null
                     }
                 }
             }
         }
+        addElapsed(now)
 
-        // Include intervals that are still open at the time of the query.
-        for ((packageName, foregroundStart) in activeSince) {
-            val intervalStart = maxOf(foregroundStart, startOfDay)
-
-            if (now > intervalStart) {
-                durations[packageName] =
-                    (durations[packageName] ?: 0L) +
-                            (now - intervalStart)
-            }
-        }
-
-        return durations
+        return totals
             .filterValues { it > 0L }
-            .map { (packageName, duration) ->
+            .map { (packageName, time) ->
                 AppUsageInfo(
                     packageName = packageName,
                     appName = getAppName(packageName),
-                    totalTimeInForeground = duration
+                    totalTimeInForeground = time
                 )
             }
             .sortedByDescending { it.totalTimeInForeground }

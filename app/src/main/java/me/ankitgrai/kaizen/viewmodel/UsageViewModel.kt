@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import me.ankitgrai.kaizen.data.usage.AppUsageInfo
+import me.ankitgrai.kaizen.data.usage.InstalledAppInfo
 import me.ankitgrai.kaizen.data.usage.UsageRepository
 import me.ankitgrai.kaizen.ui.components.AppUsage
 
@@ -16,6 +17,7 @@ data class UsageUiState(
     val isLoading: Boolean = false,
     val hasUsageAccess: Boolean = false,
     val apps: List<AppUsage> = emptyList(),
+    val installedApps: List<AppUsage> = emptyList(),
     val totalUsageMills: Long = 0L,
     val error: String? = null
 )
@@ -44,12 +46,40 @@ class UsageViewModel(
             )
             try {
                 val usage   = repository.getTodayUsage()
+                val installed = repository.getInstalledApps()
+
+                val usageByPackage = usage.associateBy {
+                    it.packageName
+                }
                 val maxUsage  = usage.maxOfOrNull {
                     it.totalTimeInForeground
                 }?:1L
+
+                val usedApps = usage
+                    .filter { it.totalTimeInForeground > 0L}
+                    .map { it.toAppUsage(maxUsage) }
+                    .sortedByDescending {
+                        usageByPackage[it.packageName]
+                            ?.totalTimeInForeground ?: 0L
+                    }
+                val allApps = installed
+                    .map { app->
+                        val appUsage  =usageByPackage[app.packageName]
+
+                        appUsage?.copy(appName = app.appName)?.toAppUsage(maxUsage) ?: app.toUnusedApp()
+                    }
+                    .sortedWith(
+                        compareByDescending < AppUsage>{
+                            usageByPackage[it.packageName]?.totalTimeInForeground ?: 0L
+                        }.thenBy {
+                            it.name.lowercase()
+                        }
+                    )
                 _uiState.value = UsageUiState(
+                    isLoading = false,
                     hasUsageAccess = true,
-                    apps = usage.map{it.toAppUsage(maxUsage)},
+                    apps = usedApps,
+                    installedApps = allApps,
                     totalUsageMills = usage.sumOf {
                         it.totalTimeInForeground
                     }
@@ -77,19 +107,10 @@ class UsageViewModel(
             .take(2)
             .joinToString("") { it.first().uppercase() }
 
-        val minutes = totalTimeInForeground / 60_000L
-        val hours = minutes / 60
-        val remainingMinutes = minutes % 60
-
-        val duration = when {
-            hours > 0 -> "${hours}h ${remainingMinutes}m"
-            else -> "${minutes}m"
-        }
-
         return AppUsage(
             name = appName,
             category = "Application",
-            duration = duration,
+            duration = formatDuration(totalTimeInForeground),
             initials  = initials.ifBlank { "?" },
             color = colors[(packageName.hashCode() and Int.MAX_VALUE) % colors.size],
             usageProgress = (
@@ -98,7 +119,45 @@ class UsageViewModel(
             packageName = packageName
         )
     }
+    private fun InstalledAppInfo.toUnusedApp(): AppUsage{
+        val colors = listOf(
+            Color(0xFFFF8178),
+            Color(0xFFC49BFF),
+            Color(0xFF8CB8FF),
+            Color(0xFFA6D989),
+            Color(0xFFFFC078)
+        )
 
+        val initials = appName
+            .split(" ")
+            .filter { it.isNotBlank() }
+            .take(2)
+            .joinToString ("") {
+                it.first().uppercase()
+            }
+        return AppUsage(
+            name = appName,
+            category = "Application",
+            duration = "0m",
+            initials = initials.ifBlank { "?" },
+            color = colors[
+                (packageName.hashCode() and Int.MAX_VALUE) % colors.size
+            ],
+            usageProgress = 0f,
+            packageName = packageName
+        )
+    }
+    private fun formatDuration(milliseconds: Long): String{
+        val totalMinutes = milliseconds/60_000L
+        val hours = totalMinutes / 60
+        val minutes = totalMinutes % 60
+
+        return if(hours > 0){
+            "${hours}h ${minutes}m"
+        }else{
+            "${minutes}m"
+        }
+    }
     fun openUsageAccessSettings(){
         repository.openUsageAccessSettings()
     }
