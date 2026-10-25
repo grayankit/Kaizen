@@ -1,6 +1,7 @@
 package me.ankitgrai.kaizen.ui.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -30,19 +31,22 @@ data class AppUsage(
     val initials: String,
     val color: Color,
     val usageProgress: Float,
-    val packageName: String = ""
+    val packageName: String = "",
+    val totalUsageMillis: Long = 0L
 )
 
 @Composable
 fun AppUsageRow(
     app: AppUsage,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit = {}
 ) {
     Column(
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(17.dp))
             .background(Color(0xFF171923))
+            .clickable(onClick = onClick)
             .padding(12.dp)
     ) {
         Row(
@@ -63,21 +67,32 @@ fun AppUsageRow(
                     text = app.name,
                     color = Color(0xFFE6E6F0),
                     fontSize = 13.sp,
-                    fontWeight = FontWeight.SemiBold
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1
                 )
                 Spacer(modifier = Modifier.width(4.dp))
                 Text(
                     text = app.category,
                     color = Color(0xFFA5A7B8),
-                    fontSize = 11.sp
+                    fontSize = 11.sp,
+                    maxLines = 1
                 )
             }
-            Text(
-                text = app.duration,
-                color = Color(0xFFE6E6F0),
-                fontSize = 12.sp,
-                fontWeight = FontWeight.SemiBold
-            )
+            Column(
+                horizontalAlignment = Alignment.End
+            ) {
+                Text(
+                    text = app.duration,
+                    color = Color(0xFFE6E6F0),
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = "${(app.usageProgress.coerceIn(0f, 1f) * 100).toInt()}%",
+                    color = Color(0xFFA5A7B8),
+                    fontSize = 10.sp
+                )
+            }
         }
         Spacer(modifier = Modifier.height(12.dp))
 
@@ -114,8 +129,11 @@ private fun PreviewAppUsageRow() {
                 duration = "1h 42m",
                 initials = "YT",
                 color = Color(0xFFFF8178),
-                usageProgress = 0.8f
-            )
+                usageProgress = 0.35f,
+                packageName = "com.google.android.youtube",
+                totalUsageMillis = 6_120_000L
+            ),
+            onClick = {}
         )
     }
 }

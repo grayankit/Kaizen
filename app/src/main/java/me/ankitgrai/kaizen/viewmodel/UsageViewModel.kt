@@ -51,22 +51,22 @@ class UsageViewModel(
                 val usageByPackage = usage.associateBy {
                     it.packageName
                 }
-                val maxUsage  = usage.maxOfOrNull {
+
+                val totalUsage = usage.sumOf {
                     it.totalTimeInForeground
-                }?:1L
+                }
 
                 val usedApps = usage
                     .filter { it.totalTimeInForeground > 0L}
-                    .map { it.toAppUsage(maxUsage) }
+                    .map { it.toAppUsage(totalUsage) }
                     .sortedByDescending {
-                        usageByPackage[it.packageName]
-                            ?.totalTimeInForeground ?: 0L
+                        it.totalUsageMillis
                     }
                 val allApps = installed
                     .map { app->
                         val appUsage  =usageByPackage[app.packageName]
 
-                        appUsage?.copy(appName = app.appName)?.toAppUsage(maxUsage) ?: app.toUnusedApp()
+                        appUsage?.copy(appName = app.appName)?.toAppUsage(totalUsage) ?: app.toUnusedApp()
                     }
                     .sortedWith(
                         compareByDescending < AppUsage>{
@@ -92,7 +92,7 @@ class UsageViewModel(
             }
         }
     }
-    private fun AppUsageInfo.toAppUsage(maxUsage: Long): AppUsage{
+    private fun AppUsageInfo.toAppUsage(totalDailyUsage: Long): AppUsage{
         val colors = listOf(
             Color(0xFFFF8178),
             Color(0xFFC49BFF),
@@ -107,16 +107,21 @@ class UsageViewModel(
             .take(2)
             .joinToString("") { it.first().uppercase() }
 
+        val progress = if (totalDailyUsage > 0L) {
+            totalTimeInForeground.toFloat() / totalDailyUsage
+        } else {
+            0f
+        }
+
         return AppUsage(
             name = appName,
-            category = "Application",
+            category = categorizedApp(packageName,appName),
             duration = formatDuration(totalTimeInForeground),
             initials  = initials.ifBlank { "?" },
             color = colors[(packageName.hashCode() and Int.MAX_VALUE) % colors.size],
-            usageProgress = (
-                    totalTimeInForeground.toFloat() /maxUsage.coerceAtLeast(1L)
-                    ).coerceIn(0f,1f),
-            packageName = packageName
+            usageProgress = progress.coerceIn(0f,1f),
+            packageName = packageName,
+            totalUsageMillis = totalTimeInForeground
         )
     }
     private fun InstalledAppInfo.toUnusedApp(): AppUsage{
@@ -137,7 +142,7 @@ class UsageViewModel(
             }
         return AppUsage(
             name = appName,
-            category = "Application",
+            category = categorizedApp(packageName,appName),
             duration = "0m",
             initials = initials.ifBlank { "?" },
             color = colors[
@@ -160,5 +165,45 @@ class UsageViewModel(
     }
     fun openUsageAccessSettings(){
         repository.openUsageAccessSettings()
+    }
+
+    private fun categorizedApp(
+        packageName: String,
+        appName: String
+    ): String{
+        val id = "$packageName $appName".lowercase()
+
+        return when {
+            listOf(
+                "instagram", "discord", "whatsapp", "telegram",
+                "facebook", "messenger", "snapchat", "reddit",
+                "signal", "threads", "x.android"
+            ).any { it in id } -> "Social"
+
+            listOf(
+                "youtube", "netflix", "twitch", "primevideo",
+                "hotstar", "video", "vlc", "mxplayer",
+                "crunchyroll", "morphe"
+            ).any { it in id } -> "Video"
+
+            listOf(
+                "spotify", "music", "soundcloud", "deezer",
+                "gaana", "jiosaavn", "podcast"
+            ).any { it in id } -> "Music"
+
+            listOf(
+                "genshin", "minecraft", "roblox", "game",
+                "pubg", "freefire", "clashofclans",
+                "playstation", "xbox"
+            ).any { it in id } -> "Games"
+
+            listOf(
+                "vscode", "visual.studio", "notion",
+                "office", "docs", "sheets", "slack",
+                "github", "gitlab", "trello", "evernote"
+            ).any { it in id } -> "Work"
+
+            else -> "Other"
+        }
     }
 }

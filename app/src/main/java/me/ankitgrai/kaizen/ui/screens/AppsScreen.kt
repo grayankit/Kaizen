@@ -1,8 +1,15 @@
 package me.ankitgrai.kaizen.ui.screens
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -22,10 +29,16 @@ import me.ankitgrai.kaizen.ui.components.CategoryFilter
 import me.ankitgrai.kaizen.ui.theme.KaizenTheme
 import me.ankitgrai.kaizen.viewmodel.UsageViewModel
 
+private val SORT_OPTIONS = listOf(
+    "Most Used",
+    "Least Used",
+    "Alphabetical"
+)
 
 @Composable
 fun AppsScreen(
-    usageViewModel: UsageViewModel = viewModel()
+    usageViewModel: UsageViewModel = viewModel(),
+    onAppClick: (String) -> Unit = {}
 ) {
     var searchQuery by remember {
         mutableStateOf("")
@@ -33,6 +46,12 @@ fun AppsScreen(
 
     var selectedCategory by remember {
         mutableStateOf("All")
+    }
+
+    var selectedSort by remember { mutableStateOf(SORT_OPTIONS[0]) }
+
+    var sortMenuExpanded by remember {
+        mutableStateOf(false)
     }
     val uiState by usageViewModel.uiState.collectAsState()
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -54,23 +73,29 @@ fun AppsScreen(
     val filteredApps = remember(
         uiState.installedApps,
         searchQuery,
-        selectedCategory
+        selectedCategory,
+        selectedSort
     ) {
-        uiState.installedApps.filter { app ->
+        val matchingApps = uiState.installedApps.filter { app ->
             val matchesSearch = app.name.contains(
+                searchQuery,
+                ignoreCase = true
+            ) || app.packageName.contains(
                 searchQuery,
                 ignoreCase = true
             )
             val matchesCategory = when(selectedCategory) {
                 "All" -> true
-                "Social" -> app.category == "Social"
-                "Video" -> app.category.startsWith("Video")
-                "Work" -> app.category == "Work"
-                "Music" -> app.category == "Music"
-                else -> true
+                else -> app.category == selectedCategory
             }
             matchesSearch && matchesCategory
         }
+        when (selectedSort) {
+            SORT_OPTIONS[1] -> matchingApps.sortedBy { it.totalUsageMillis }
+            SORT_OPTIONS[2] -> matchingApps.sortedBy { it.name.lowercase() }
+            else -> matchingApps.sortedByDescending { it.totalUsageMillis }
+        }
+
     }
 
     Column(
@@ -121,11 +146,40 @@ fun AppsScreen(
                 fontWeight = FontWeight.SemiBold
             )
 
-            Text(
-                text = "Ranked by screen time",
-                color = Color(0xFFA5A7B8),
-                fontSize = 10.sp
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = selectedSort,
+                    color = Color(0xFFA5A7B8),
+                    fontSize = 10.sp,
+                    modifier = Modifier.clickable{
+                        sortMenuExpanded = true
+                    }
+                )
+                DropdownMenu(
+                    expanded = sortMenuExpanded,
+                    onDismissRequest = {
+                        sortMenuExpanded = false
+                    }
+                ) {
+                    SORT_OPTIONS.forEach { option ->
+                        DropdownMenuItem(
+                            text = {
+                                Text(option)
+                            },
+                            onClick = {
+                                selectedSort = option
+                                sortMenuExpanded = false
+                            }
+                        )
+                    }
+                }
+            }
+
+
 
             CategoryFilter(
                 selectedCategory = selectedCategory,
@@ -134,21 +188,65 @@ fun AppsScreen(
                 }
             )
         }
+        when{
+            !uiState.hasUsageAccess && !uiState.isLoading ->{
+                Text(
+                    text = "Usage access is required to display app screen time.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Button(
+                    onClick = {
+                        usageViewModel.openUsageAccessSettings()
+                    }
+                ) {
+                    Text("Grant usage access")
+                }
+            }
+            uiState.isLoading && uiState.installedApps.isEmpty() -> {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 32.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator()
+                }
+            }
+            uiState.error != null && uiState.installedApps.isEmpty() -> {
+                Text(
+                    text = uiState.error ?: "Unable to load applications.",
+                    color = MaterialTheme.colorScheme.error
+                )
 
-        if (filteredApps.isEmpty()) {
-            Text(
-                text = "No applications found.",
-                color = Color(0xFFA5A7B8),
-                modifier = Modifier.padding(vertical = 24.dp)
-            )
-        } else {
+                Button(
+                    onClick = {
+                        usageViewModel.refresh()
+                    }
+                ) {
+                    Text("Retry")
+                }
+            }
+            filteredApps.isEmpty() ->{
+                Text(
+                    text = "No applications found.",
+                    color = Color(0xFFA5A7B8),
+                    modifier = Modifier.padding(vertical = 24.dp)
+                )
+            }else-> {
             Column(
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 filteredApps.forEach { app ->
-                    AppUsageRow(app = app)
+                    AppUsageRow(app = app,
+                        onClick = {
+                            if(app.packageName.isNotBlank()){
+                                onAppClick(app.packageName)
+                            }
+                        }
+                    )
                 }
             }
+        }
         }
 
         Spacer(modifier = Modifier.height(8.dp))
