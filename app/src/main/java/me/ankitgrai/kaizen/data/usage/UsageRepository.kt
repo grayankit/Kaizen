@@ -50,4 +50,12 @@ class UsageRepository (context: Context){
 
         }
     }
+    suspend fun getAppUsageHistory(
+        packageName: String,
+        days: Int = 7
+    ): List<DailyAppUsage> {
+        return withContext(Dispatchers.IO) {
+            dataSource.getAppUsageHistory(packageName, days)
+        }
+    }
 }

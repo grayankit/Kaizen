@@ -1,5 +1,6 @@
 package me.ankitgrai.kaizen.navigation
 
+import android.net.Uri
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -10,26 +11,33 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
 import me.ankitgrai.kaizen.ui.components.CurrentScreen
 import me.ankitgrai.kaizen.ui.components.FloatingNavigationBar
+import me.ankitgrai.kaizen.ui.screens.AppDetailsScreen
 import me.ankitgrai.kaizen.ui.screens.AppsScreen
 import me.ankitgrai.kaizen.ui.screens.HistoryScreen
 import me.ankitgrai.kaizen.ui.screens.OverviewScreen
 import me.ankitgrai.kaizen.ui.theme.KaizenTheme
+import me.ankitgrai.kaizen.viewmodel.UsageViewModel
 
 private object Routes{
     const val OVERVIEW = "overview"
     const val APPS = "apps"
     const val HISTORY = "history"
+    const val APP_DETAILS = "app_details/{packageName}"
 }
 
 @Composable
 fun AppNavigation(){
     val navController  = rememberNavController()
+    val usageViewModel: UsageViewModel = viewModel()
     val currentRoute = navController
         .currentBackStackEntryAsState()
         .value?.destination?.route
@@ -41,32 +49,34 @@ fun AppNavigation(){
     }
     Scaffold(
         bottomBar = {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 24.dp, vertical = 16.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                FloatingNavigationBar(
-                    selectedDestination = selectedDestination,
-                    onScreenSelected = { destination ->
-                        val route = when (destination) {
-                            CurrentScreen.Overview -> Routes.OVERVIEW
-                            CurrentScreen.Apps -> Routes.APPS
-                            CurrentScreen.History -> Routes.HISTORY
-                        }
-                        if (route != currentRoute) {
-                            navController.navigate(route) {
-                                popUpTo(Routes.OVERVIEW) {
-                                    saveState = true
-                                }
-                                launchSingleTop = true
-                                restoreState = true
+            if(currentRoute != Routes.APP_DETAILS) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 24.dp, vertical = 16.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    FloatingNavigationBar(
+                        selectedDestination = selectedDestination,
+                        onScreenSelected = { destination ->
+                            val route = when (destination) {
+                                CurrentScreen.Overview -> Routes.OVERVIEW
+                                CurrentScreen.Apps -> Routes.APPS
+                                CurrentScreen.History -> Routes.HISTORY
                             }
-                        }
-                    },
-                    modifier = Modifier.fillMaxWidth()
-                )
+                            if (route != currentRoute) {
+                                navController.navigate(route) {
+                                    popUpTo(Routes.OVERVIEW) {
+                                        saveState = true
+                                    }
+                                    launchSingleTop = true
+                                    restoreState = true
+                                }
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
             }
         }
     ) {
@@ -81,8 +91,35 @@ fun AppNavigation(){
             composable (Routes.OVERVIEW){
                 OverviewScreen()
             }
-            composable (Routes.APPS){
-                AppsScreen()
+            composable(Routes.APPS) {
+                AppsScreen(
+                    usageViewModel = usageViewModel,
+                    onAppClick = { packageName ->
+                        navController.navigate(
+                            "app_details/${Uri.encode(packageName)}"
+                        )
+                    }
+                )
+            }
+            composable(
+                route = Routes.APP_DETAILS,
+                arguments = listOf(
+                    navArgument("packageName") {
+                        type = NavType.StringType
+                    }
+                )
+            ) { backStackEntry ->
+                val packageName = Uri.decode(
+                    backStackEntry.arguments?.getString("packageName").orEmpty()
+                )
+
+                AppDetailsScreen(
+                    packageName = packageName,
+                    onBack = {
+                        navController.popBackStack()
+                    },
+                    usageViewModel = usageViewModel
+                )
             }
             composable (Routes.HISTORY){
                 HistoryScreen()

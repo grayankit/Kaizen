@@ -113,6 +113,49 @@ class UsageStateDataSource (
             }
             .sortedByDescending { it.totalTimeInForeground }
     }
+    fun getAppUsageHistory(
+        packageName: String,
+        days: Int = 7
+    ): List<DailyAppUsage>{
+        require(days >0){
+            "Days must be greater than zero"
+        }
+        val zone = ZoneId.systemDefault()
+        val today = LocalDate.now(zone)
+
+        return (days -1 downTo 0).map { daysAgo->
+            val date = today.minusDays(daysAgo.toLong())
+            val startOfDay = date
+                .atStartOfDay(zone)
+                .toInstant()
+                .toEpochMilli()
+            val endOfDay = date
+                .plusDays(1)
+                .atStartOfDay(zone)
+                .toInstant()
+                .toEpochMilli()
+                .coerceAtMost(System.currentTimeMillis())
+            val totalUsage = if(endOfDay <= startOfDay){
+                0L
+            }else{
+                val stats = usageStatsManager.queryUsageStats(
+                    UsageStatsManager.INTERVAL_DAILY,
+                    startOfDay,
+                    endOfDay
+                )
+                stats
+                    .filter {
+                        it.packageName ==packageName
+                    }
+                    .sumOf { it.totalTimeInForeground }
+            }
+            DailyAppUsage(
+                date = date,
+                packageName = packageName,
+                totalTimeInForeground = totalUsage
+            )
+        }
+    }
     private fun getAppName(packageName: String): String {
         return try {
             val appInfo = context.packageManager.getApplicationInfo(

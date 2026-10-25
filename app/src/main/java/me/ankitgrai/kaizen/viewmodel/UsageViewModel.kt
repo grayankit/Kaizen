@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import me.ankitgrai.kaizen.data.usage.AppUsageInfo
+import me.ankitgrai.kaizen.data.usage.DailyAppUsage
 import me.ankitgrai.kaizen.data.usage.InstalledAppInfo
 import me.ankitgrai.kaizen.data.usage.UsageRepository
 import me.ankitgrai.kaizen.ui.components.AppUsage
@@ -21,12 +22,21 @@ data class UsageUiState(
     val totalUsageMills: Long = 0L,
     val error: String? = null
 )
+data class AppDetailsUiState(
+    val isLoading: Boolean = false,
+    val history: List<DailyAppUsage> = emptyList(),
+    val error: String? = null
+)
 class UsageViewModel(
     application: Application
 ): AndroidViewModel(application){
     private val  repository = UsageRepository(application)
 
     private val _uiState  = MutableStateFlow(UsageUiState())
+
+    private val _appDetailsState = MutableStateFlow(AppDetailsUiState())
+    val appDetailsState: StateFlow<AppDetailsUiState> =
+        _appDetailsState.asStateFlow()
     val uiState: StateFlow<UsageUiState>  = _uiState.asStateFlow()
 
     fun refresh(){
@@ -167,6 +177,27 @@ class UsageViewModel(
         repository.openUsageAccessSettings()
     }
 
+    fun loadAppDetails(packageName: String){
+        viewModelScope.launch {
+            _appDetailsState.value = AppDetailsUiState( true)
+
+            try {
+                val history = repository.getAppUsageHistory(
+                    packageName,
+                    7
+                )
+                _appDetailsState.value = AppDetailsUiState(
+                    false,
+                    history
+                )
+            }catch (exception: Exception){
+                _appDetailsState.value = AppDetailsUiState(
+                    false,
+                    error = exception.message ?: "Unable to load app usage history."
+                )
+            }
+        }
+    }
     private fun categorizedApp(
         packageName: String,
         appName: String
@@ -206,4 +237,5 @@ class UsageViewModel(
             else -> "Other"
         }
     }
+
 }
