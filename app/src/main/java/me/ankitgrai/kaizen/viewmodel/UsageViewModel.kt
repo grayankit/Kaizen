@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import me.ankitgrai.kaizen.data.usage.AppUsageInfo
 import me.ankitgrai.kaizen.data.usage.DailyAppUsage
+import me.ankitgrai.kaizen.data.usage.DailyDeviceUsage
 import me.ankitgrai.kaizen.data.usage.InstalledAppInfo
 import me.ankitgrai.kaizen.data.usage.UsageRepository
 import me.ankitgrai.kaizen.ui.components.AppUsage
@@ -27,6 +28,12 @@ data class AppDetailsUiState(
     val history: List<DailyAppUsage> = emptyList(),
     val error: String? = null
 )
+
+data class HistoryUiState(
+    val isLoading: Boolean = false,
+    val days: List<DailyDeviceUsage> = emptyList(),
+    val error: String? = null
+)
 class UsageViewModel(
     application: Application
 ): AndroidViewModel(application){
@@ -35,6 +42,11 @@ class UsageViewModel(
     private val _uiState  = MutableStateFlow(UsageUiState())
 
     private val _appDetailsState = MutableStateFlow(AppDetailsUiState())
+
+    private val _historyState = MutableStateFlow(HistoryUiState())
+
+    val historyState: StateFlow<HistoryUiState> =
+        _historyState.asStateFlow()
     val appDetailsState: StateFlow<AppDetailsUiState> =
         _appDetailsState.asStateFlow()
     val uiState: StateFlow<UsageUiState>  = _uiState.asStateFlow()
@@ -98,6 +110,25 @@ class UsageViewModel(
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
                     error = exception.message?:"Unable to load usage data."
+                )
+            }
+        }
+    }
+
+    fun refreshHistory(days: Int = 90) {
+        viewModelScope.launch {
+            _historyState.value = HistoryUiState(isLoading = true)
+
+            try {
+                _historyState.value = HistoryUiState(
+                    isLoading = false,
+                    days = repository.getDailyDeviceUsage(days)
+                )
+            } catch (exception: Exception) {
+                _historyState.value = HistoryUiState(
+                    isLoading = false,
+                    error = exception.message
+                        ?: "Unable to load usage history."
                 )
             }
         }

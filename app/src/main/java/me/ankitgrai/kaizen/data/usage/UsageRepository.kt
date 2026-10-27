@@ -58,4 +58,11 @@ class UsageRepository (context: Context){
             dataSource.getAppUsageHistory(packageName, days)
         }
     }
+    suspend fun getDailyDeviceUsage(
+        days: Int = 90
+    ): List<DailyDeviceUsage> {
+        return withContext(Dispatchers.IO) {
+            dataSource.getDailyDeviceUsage(days)
+        }
+    }
 }

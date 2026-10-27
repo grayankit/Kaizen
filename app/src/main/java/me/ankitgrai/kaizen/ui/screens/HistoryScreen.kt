@@ -2,7 +2,10 @@ package me.ankitgrai.kaizen.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -10,325 +13,574 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowLeft
 import androidx.compose.material.icons.automirrored.outlined.ArrowRight
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.ui.graphics.Color
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import me.ankitgrai.kaizen.ui.components.AppUsage
-import me.ankitgrai.kaizen.ui.components.UsageBar
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
+import me.ankitgrai.kaizen.data.usage.DailyDeviceUsage
+import me.ankitgrai.kaizen.ui.components.PeriodSelector
 import me.ankitgrai.kaizen.ui.components.UsagePeriod
+import me.ankitgrai.kaizen.ui.theme.KaizenTheme
+import me.ankitgrai.kaizen.viewmodel.UsageViewModel
+import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import androidx.compose.ui.platform.LocalLocale
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.intl.Locale
 import androidx.compose.ui.tooling.preview.Preview
-import me.ankitgrai.kaizen.ui.theme.KaizenTheme
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import me.ankitgrai.kaizen.ui.components.AppUsageRow
-import me.ankitgrai.kaizen.ui.components.PeriodSelector
-import me.ankitgrai.kaizen.ui.components.UsageBarChart
+import me.ankitgrai.kaizen.viewmodel.HistoryUiState
 
-private data class HistoryDay(
-    val date: LocalDate,
-    val minutes: Int
-)
-private val HistoryApps = listOf(
-    AppUsage(
-        name = "YouTube",
-        category = "Video",
-        duration = "6h 18m",
-        initials = "YT",
-        color = Color(0xFFF28B9B),
-        usageProgress = 0.90f
-    ),
-    AppUsage(
-        name = "Instagram",
-        category = "Social",
-        duration = "3h 24m",
-        initials = "IG",
-        color = Color(0xFFC49BFF),
-        usageProgress = 0.62f
-    ),
-    AppUsage(
-        name = "Chrome",
-        category = "Web",
-        duration = "2h 41m",
-        initials = "CH",
-        color = Color(0xFF8CB8FF),
-        usageProgress = 0.48f
-    ),
-    AppUsage(
-        name = "Spotify",
-        category = "Music",
-        duration = "1h 56m",
-        initials = "SP",
-        color = Color(0xFFA6D989),
-        usageProgress = 0.34f
-    ),
-    AppUsage(
-        name = "Discord",
-        category = "Social",
-        duration = "1h 12m",
-        initials = "DC",
-        color = Color(0xFF9C9FFF),
-        usageProgress = 0.22f
-    )
-)
-
-
+private val HistoryText = Color(0xFFE6E6F0)
+private val HistoryMuted = Color(0xFFA5A7B8)
 
 @Composable
-fun HistoryScreen(getDefault: Locale.Companion.() -> java.util.Locale = { java.util.Locale.getDefault() }) {
+fun HistoryScreen(
+    usageViewModel: UsageViewModel = viewModel()
+) {
+    val historyState by usageViewModel.historyState.collectAsState()
+
+    LaunchedEffect(Unit) {
+        usageViewModel.refreshHistory()
+    }
+
+    HistoryContent(
+        historyState = historyState
+    )
+}
+
+@Composable
+fun HistoryContent(
+    historyState: HistoryUiState
+) {
+    val today = LocalDate.now()
+
     var selectedPeriod by remember {
         mutableStateOf(UsagePeriod.WEEK)
     }
 
+    var periodDate by remember {
+        mutableStateOf(today)
+    }
+
     var selectedDate by remember {
-        mutableStateOf(LocalDate.now())
+        mutableStateOf(today)
     }
 
-    var selectedIndex by remember {
-        mutableIntStateOf(0)
+    val historyByDate = historyState.days.associateBy {
+        it.date
     }
-    val dailyData = remember (selectedDate) {
-        val start = selectedDate.with(
-            java.time.DayOfWeek.MONDAY
-        )
 
-        val minutes = listOf(
-            138, 222, 171, 245, 192, 104, 76
-        )
-
-        (0..6).map { index ->
-            HistoryDay(
-                date = start.plusDays(index.toLong()),
-                minutes = minutes[index]
-            )
+    val chartDays = when (selectedPeriod) {
+        UsagePeriod.DAY -> {
+            listOf(periodDate)
         }
-    }
-        val chartData = when (selectedPeriod) {
-            UsagePeriod.DAY -> listOf(
-                UsageBar("00", 0),
-                UsageBar("04", 0),
-                UsageBar("08", 25),
-                UsageBar("12", 85),
-                UsageBar("16", 120),
-                UsageBar("20", 48)
-            )
 
-            UsagePeriod.WEEK -> dailyData.map {
-                UsageBar(
-                    label = it.date.format(
-                        DateTimeFormatter.ofPattern("EE", LocalLocale.current.platformLocale)
-                    ).take(1),
-                    minutes = it.minutes
-                )
-            }
+        UsagePeriod.WEEK -> {
+            val start = periodDate.with(DayOfWeek.MONDAY)
 
-            UsagePeriod.MONTH -> (1..30).map { day ->
-                UsageBar(
-                    label = if (day % 5 == 0) "$day" else "",
-                    minutes = 60 + (day * 37 % 200)
-                )
+            (0..6).map { offset ->
+                start.plusDays(offset.toLong())
             }
         }
-        val totalMinutes = when (selectedPeriod) {
-            UsagePeriod.DAY -> 278
-            UsagePeriod.WEEK -> dailyData.sumOf { it.minutes }
-            UsagePeriod.MONTH -> (1..30).sumOf { 60 + (it * 37 % 200) }
+
+        UsagePeriod.MONTH -> {
+            (1..periodDate.lengthOfMonth()).map { day ->
+                periodDate.withDayOfMonth(day)
+            }
+        }
+    }.map { date ->
+        historyByDate[date] ?: DailyDeviceUsage(
+            date = date,
+            totalUsageMillis = 0L
+        )
+    }
+
+    val selectedDay = chartDays.firstOrNull {
+        it.date == selectedDate
+    } ?: chartDays.lastOrNull {
+        !it.date.isAfter(today)
+    }
+
+    val recordedDays = chartDays.filter {
+        !it.date.isAfter(today) &&
+                historyByDate.containsKey(it.date)
+    }
+
+    val totalUsage = recordedDays.sumOf {
+        it.totalUsageMillis
+    }
+
+    val averageUsage = if (recordedDays.isNotEmpty()) {
+        totalUsage / recordedDays.size
+    } else {
+        0L
+    }
+
+    val periodLabel = when (selectedPeriod) {
+        UsagePeriod.DAY -> periodDate.format(
+            DateTimeFormatter.ofPattern(
+                "dd MMM yyyy",
+                LocalLocale.current.platformLocale
+            )
+        )
+
+        UsagePeriod.WEEK -> {
+            val start = periodDate.with(DayOfWeek.MONDAY)
+            val end = start.plusDays(6)
+
+            "${start.format(DateTimeFormatter.ofPattern("dd MMM", LocalLocale.current.platformLocale))} – " +
+                    end.format(
+                        DateTimeFormatter.ofPattern(
+                            "dd MMM",
+                            LocalLocale.current.platformLocale
+                        )
+                    )
         }
 
-        val hours = totalMinutes / 60
-        val minutes = totalMinutes % 60
+        UsagePeriod.MONTH -> periodDate.format(
+            DateTimeFormatter.ofPattern(
+                "MMMM yyyy",
+                LocalLocale.current.platformLocale
+            )
+        )
+    }
 
-    Column(modifier = Modifier
-        .fillMaxSize()
-        .verticalScroll(rememberScrollState())
-        .padding(horizontal = 20.dp, vertical = 24.dp),
-        verticalArrangement = Arrangement.spacedBy(20.dp))
-    {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 20.dp, vertical = 24.dp),
+        verticalArrangement = Arrangement.spacedBy(20.dp)
+    ) {
+        // Screen heading
         Column(
             verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             Text(
                 text = "History",
-                color = Color(0xFFE6E6F0),
+                color = HistoryText,
                 fontSize = 25.sp,
                 fontWeight = FontWeight.Bold
             )
+
             Text(
-                text  ="Understand your screen-time patterns.",
-                color = Color(0xFFA5A7B8),
+                text = "Understand where your time goes.",
+                color = HistoryMuted,
                 fontSize = 12.sp
             )
-            PeriodSelector(
-                selectedPeriod = selectedPeriod,
-                onPeriodSelected = {
-                    selectedPeriod = it
-                    selectedIndex = 0
+        }
+
+        // Day, week, and month selector
+        PeriodSelector(
+            selectedPeriod = selectedPeriod,
+            onPeriodSelected = { period ->
+                selectedPeriod = period
+                periodDate = today
+                selectedDate = today
+            },
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        // Usage summary
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(20.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant)
+                .padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(
+                text = when (selectedPeriod) {
+                    UsagePeriod.DAY -> "DAILY USAGE"
+                    UsagePeriod.WEEK -> "WEEKLY USAGE"
+                    UsagePeriod.MONTH -> "MONTHLY USAGE"
                 },
-                modifier = Modifier.fillMaxWidth()
+                color = HistoryMuted,
+                fontSize = 10.sp,
+                fontWeight = FontWeight.SemiBold
             )
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(
-                        Color(0xFF171923),
-                        RoundedCornerShape(20.dp)
-                    )
-                    .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Text(
-                    text = when (selectedPeriod) {
-                        UsagePeriod.DAY -> "TODAY'S USAGE"
-                        UsagePeriod.WEEK -> "THIS WEEK"
-                        UsagePeriod.MONTH -> "THIS MONTH"
-                    },
-                    color = Color(0xFFA5A7B8),
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
 
-                Text(
-                    text = "${hours}h ${minutes}m",
-                    color = Color(0xFFE6E6F0),
-                    fontSize = 27.sp,
-                    fontWeight = FontWeight.Bold
-                )
+            Text(
+                text = if (historyState.isLoading) {
+                    "Loading..."
+                } else {
+                    formatHistoryDuration(totalUsage)
+                },
+                color = HistoryText,
+                fontSize = 27.sp,
+                fontWeight = FontWeight.Bold
+            )
 
-                Text(
-                    text = "Sample usage data",
-                    color = Color(0xFFA5A7B8),
-                    fontSize = 11.sp
-                )
+            Text(
+                text = when {
+                    historyState.isLoading ->
+                        "Fetching device usage"
 
-                Spacer(modifier = Modifier.height(8.dp))
+                    historyState.error != null ->
+                        historyState.error.orEmpty()
 
-                UsageBarChart(
-                    data = chartData,
-                    selectedIndex = selectedIndex.coerceIn(
-                        0,
-                        chartData.lastIndex
-                    ),
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(
-                        Color(0xFF9DD5D9),
-                        RoundedCornerShape(15.dp)
-                    )
-                    .padding(horizontal = 12.dp, vertical = 10.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Outlined.ArrowLeft,
-                    contentDescription = null,
-                    tint = Color(0xFF203F42),
-                    modifier = Modifier.clickable {
-                        selectedDate = when (selectedPeriod) {
-                            UsagePeriod.DAY -> selectedDate.minusDays(1)
-                            UsagePeriod.WEEK -> selectedDate.minusWeeks(1)
-                            UsagePeriod.MONTH -> selectedDate.minusMonths(1)
-                        }
-                        selectedIndex = 0
+                    recordedDays.isEmpty() ->
+                        "No recorded usage available for this period"
+                    else ->
+                        "Average per recorded day: ${
+                            formatHistoryDuration(averageUsage)
+                        }"
+                },
+                color = if (historyState.error != null) {
+                    MaterialTheme.colorScheme.error
+                } else {
+                    HistoryMuted
+                },
+                fontSize = 11.sp
+            )
+        }
+
+        // Period navigation
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(15.dp))
+                .background(Color(0xFF9DD5D9))
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Icon(
+                imageVector = Icons.AutoMirrored.Outlined.ArrowLeft,
+                contentDescription = "Previous period",
+                tint = Color(0xFF203F42),
+                modifier = Modifier.clickable {
+                    periodDate = when (selectedPeriod) {
+                        UsagePeriod.DAY -> periodDate.minusDays(1)
+                        UsagePeriod.WEEK -> periodDate.minusWeeks(1)
+                        UsagePeriod.MONTH -> periodDate.minusMonths(1)
                     }
-                )
-                Text(
-                    text = when (selectedPeriod) {
-                        UsagePeriod.DAY -> selectedDate.format(
-                            DateTimeFormatter.ofPattern(
-                                "dd MMM yyyy",
-                                Locale.getDefault()
-                            )
-                        )
+                    selectedDate = periodDate
+                }
+            )
 
-                        UsagePeriod.WEEK -> {
-                            val start = selectedDate.with(
-                                java.time.DayOfWeek.MONDAY
-                            )
-                            val end = start.plusDays(6)
+            Text(
+                text = periodLabel,
+                color = Color(0xFF203F42),
+                fontSize = 11.sp,
+                fontWeight = FontWeight.SemiBold
+            )
 
-                            "${start.format(DateTimeFormatter.ofPattern("dd MMM"))} – " +
-                                    end.format(DateTimeFormatter.ofPattern("dd MMM"))
-                        }
-
-                        UsagePeriod.MONTH -> selectedDate.format(
-                            DateTimeFormatter.ofPattern(
-                                "MMMM yyyy",
-                                Locale.getDefault()
-                            )
-                        )
-                    },
-                    color = Color(0xFF203F42),
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
-                Icon(
-                    imageVector = Icons.AutoMirrored.Outlined.ArrowRight,
-                    contentDescription = null,
-                    tint = Color(0xFF203F42),
-                    modifier = Modifier.clickable {
-                        selectedDate = when (selectedPeriod) {
-                            UsagePeriod.DAY -> selectedDate.plusDays(1)
-                            UsagePeriod.WEEK -> selectedDate.plusWeeks(1)
-                            UsagePeriod.MONTH -> selectedDate.plusMonths(1)
-                        }
-                        selectedIndex = 0
-                    }
-                )
+            val nextDate = when (selectedPeriod) {
+                UsagePeriod.DAY -> periodDate.plusDays(1)
+                UsagePeriod.WEEK -> periodDate.plusWeeks(1)
+                UsagePeriod.MONTH -> periodDate.plusMonths(1)
             }
-            Column(
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                Text(
-                    text = "Most-used apps",
-                    color = Color(0xFFE6E6F0),
-                    fontSize = 17.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
 
-                Text(
-                    text = "Ranked by screen time",
-                    color = Color(0xFFA5A7B8),
-                    fontSize = 11.sp
-                )
+            val canGoForward = !nextDate.isAfter(today)
 
-                HistoryApps.forEach {
-                    app ->
-                    AppUsageRow(app=app)
+            Icon(
+                imageVector = Icons.AutoMirrored.Outlined.ArrowRight,
+                contentDescription = "Next period",
+                tint = if (canGoForward) {
+                    Color(0xFF203F42)
+                } else {
+                    Color(0x80203F42)
+                },
+                modifier = Modifier.clickable(
+                    enabled = canGoForward
+                ) {
+                    periodDate = nextDate
+                    selectedDate = periodDate
+                }
+            )
+        }
+
+        // Daily usage chart
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(20.dp))
+                .background(MaterialTheme.colorScheme.surface)
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Text(
+                text = when (selectedPeriod) {
+                    UsagePeriod.DAY -> "Selected day"
+                    UsagePeriod.WEEK -> "Daily screen time"
+                    UsagePeriod.MONTH -> "Usage by day"
+                },
+                color = HistoryText,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+
+            when {
+                historyState.isLoading -> {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(150.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator()
+                    }
+                }
+
+                historyState.error != null -> {
+                    Text(
+                        text = "Couldn't load your usage history.\n" +
+                                historyState.error.orEmpty(),
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+
+                else -> {
+                    HistoryUsageChart(
+                        days = chartDays,
+                        selectedDate = selectedDay?.date,
+                        today = today,
+                        period = selectedPeriod,
+                        onDaySelected = { date ->
+                            selectedDate = date
+                        }
+                    )
+
+                    selectedDay?.let { day ->
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(
+                                    MaterialTheme.colorScheme.surfaceVariant
+                                )
+                                .padding(14.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Text(
+                                text = day.date.format(
+                                    DateTimeFormatter.ofPattern(
+                                        "EEEE, MMM d",
+                                        LocalLocale.current.platformLocale
+                                    )
+                                ),
+                                color = HistoryText,
+                                fontWeight = FontWeight.SemiBold
+                            )
+
+                            Text(
+                                text = if (day.date == today) {
+                                    "Today's screen time"
+                                } else {
+                                    "Screen time"
+                                },
+                                color = HistoryMuted,
+                                fontSize = 12.sp
+                            )
+
+                            Text(
+                                text = formatHistoryDuration(
+                                    day.totalUsageMillis
+                                ),
+                                color = HistoryText,
+                                fontSize = 22.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
                 }
             }
-
-            Spacer(modifier = Modifier.height(12.dp))
         }
+
+        Spacer(modifier = Modifier.height(12.dp))
+    }
+}
+
+@Composable
+private fun HistoryUsageChart(
+    days: List<DailyDeviceUsage>,
+    selectedDate: LocalDate?,
+    today: LocalDate,
+    period: UsagePeriod,
+    onDaySelected: (LocalDate) -> Unit
+) {
+    val barColor = MaterialTheme.colorScheme.primary
+    val labelColor = MaterialTheme.colorScheme.onSurfaceVariant
+
+    val maxUsage = days.maxOfOrNull {
+        it.totalUsageMillis
+    }?.coerceAtLeast(1L) ?: 1L
+
+    BoxWithConstraints(
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        val itemWidth = if (days.size <= 7) {
+            maxWidth / days.size.coerceAtLeast(1)
+        } else {
+            42.dp
+        }
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
+            verticalAlignment = Alignment.Bottom
+        ) {
+            days.forEach { day ->
+                val selected = day.date == selectedDate
+                val fraction = (
+                        day.totalUsageMillis.toFloat() / maxUsage
+                        ).coerceIn(0f, 1f)
+
+                val barHeight = if (day.totalUsageMillis > 0L) {
+                    (130f * fraction).dp
+                } else {
+                    3.dp
+                }
+
+                Column(
+                    modifier = Modifier
+                        .width(itemWidth)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(
+                            if (selected) {
+                                barColor.copy(alpha = 0.12f)
+                            } else {
+                                Color.Transparent
+                            }
+                        )
+                        .clickable(
+                            enabled = !day.date.isAfter(today)
+                        ) {
+                            onDaySelected(day.date)
+                        }
+                        .padding(horizontal = 2.dp, vertical = 6.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(130.dp),
+                        contentAlignment = Alignment.BottomCenter
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .width(24.dp)
+                                .height(barHeight)
+                                .clip(
+                                    RoundedCornerShape(
+                                        topStart = 7.dp,
+                                        topEnd = 7.dp
+                                    )
+                                )
+                                .background(
+                                    if (selected) {
+                                        barColor
+                                    } else {
+                                        barColor.copy(alpha = 0.65f)
+                                    }
+                                )
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    val label = when (period) {
+                        UsagePeriod.DAY -> day.date.format(
+                            DateTimeFormatter.ofPattern(
+                                "d MMM",
+                                LocalLocale.current.platformLocale
+                            )
+                        )
+
+                        UsagePeriod.WEEK -> day.date.format(
+                            DateTimeFormatter.ofPattern(
+                                "EE",
+                                LocalLocale.current.platformLocale
+                            )
+                        )
+
+                        UsagePeriod.MONTH -> {
+                            if (
+                                day.date.dayOfMonth % 5 == 0 ||
+                                selected
+                            ) {
+                                day.date.dayOfMonth.toString()
+                            } else {
+                                ""
+                            }
+                        }
+                    }
+
+                    Text(
+                        text = label,
+                        color = if (selected) {
+                            MaterialTheme.colorScheme.onSurface
+                        } else {
+                            labelColor
+                        },
+                        fontSize = 10.sp,
+                        fontWeight = if (selected) {
+                            FontWeight.Bold
+                        } else {
+                            FontWeight.Normal
+                        }
+                    )
+                }
+            }
+        }
+    }
+}
+
+private fun formatHistoryDuration(milliseconds: Long): String {
+    val totalMinutes = milliseconds / 60_000L
+    val hours = totalMinutes / 60
+    val minutes = totalMinutes % 60
+
+    return if (hours > 0) {
+        "${hours}h ${minutes}m"
+    } else {
+        "${minutes}m"
     }
 }
 
 @Preview(showBackground = true)
 @Composable
 private fun HistoryScreenPreview() {
+    val today = LocalDate.now()
+    val startOfWeek = today.with(DayOfWeek.MONDAY)
+    val sampleDays = (0..6).map { offset ->
+        DailyDeviceUsage(
+            date = startOfWeek.plusDays(offset.toLong()),
+            totalUsageMillis = (offset + 1) * 3_600_000L
+        )
+    }
+
     KaizenTheme(darkTheme = true) {
-        HistoryScreen()
+        HistoryContent(
+            historyState = HistoryUiState(
+                isLoading = false,
+                days = sampleDays
+            )
+        )
     }
 }
 
