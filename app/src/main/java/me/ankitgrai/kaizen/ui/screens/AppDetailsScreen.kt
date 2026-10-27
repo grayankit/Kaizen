@@ -14,8 +14,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
-import androidx.compose.material.icons.automirrored.outlined.ArrowLeft
-import androidx.compose.material.icons.materialIcon
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -53,6 +51,7 @@ import me.ankitgrai.kaizen.viewmodel.UsageViewModel
 import java.time.format.TextStyle
 import java.util.Locale
 import androidx.core.net.toUri
+import java.time.ZoneId
 
 @Composable
 fun AppDetailsScreen(
@@ -88,21 +87,27 @@ fun AppDetailsContent(
     val app = uiState.installedApps.firstOrNull{
         it.packageName == packageName
     }
-
-
-    val todayUsage = detailsState.history.lastOrNull()
-        ?.totalTimeInForeground ?: 0L
+    val todayUsage = app?.totalUsageMillis ?: 0L
     val totalUsage = uiState.totalUsageMills
     val percentage = if (totalUsage > 0L) {
         todayUsage.toFloat() / totalUsage * 100f
     } else {
         0f
     }
-    val averageUsage = if(detailsState.history.isNotEmpty()){
-        detailsState.history.sumOf {
-            it.totalTimeInForeground
+    val today = LocalDate.now(ZoneId.systemDefault())
+
+    val correctedHistory = detailsState.history.map { day ->
+        if (day.date == today) {
+            day.copy(totalTimeInForeground = todayUsage)
+        } else {
+            day
         }
-    }else{
+    }
+    val averageUsage = if (correctedHistory.isNotEmpty()) {
+        correctedHistory.sumOf {
+            it.totalTimeInForeground
+        } / correctedHistory.size
+    } else {
         0L
     }
     Scaffold(
@@ -221,7 +226,7 @@ fun AppDetailsContent(
 
                         else -> {
                             WeeklyUsageChart(
-                                history = detailsState.history
+                                history = correctedHistory
                             )
                             Spacer(Modifier.height(4.dp))
 
@@ -279,10 +284,8 @@ private fun WeeklyUsageChart(
                 ).coerceAtMost(36.dp.toPx())
 
         history.forEachIndexed { index, item ->
-            val barHeight = (
-                    item.totalTimeInForeground.toFloat() /
-                            maxUsage
-                    ) * chartHeight
+            val barHeight =
+                    item.totalTimeInForeground.toFloat() / maxUsage * chartHeight
 
             val x = index * (barWidth + gap) +
                     (size.width -
