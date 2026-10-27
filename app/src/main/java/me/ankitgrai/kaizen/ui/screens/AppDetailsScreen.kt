@@ -2,7 +2,6 @@ package me.ankitgrai.kaizen.ui.screens
 
 import android.content.Intent
 import android.provider.Settings
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -30,11 +29,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.nativeCanvas
-import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
@@ -48,10 +48,12 @@ import me.ankitgrai.kaizen.ui.theme.KaizenTheme
 import me.ankitgrai.kaizen.viewmodel.AppDetailsUiState
 import me.ankitgrai.kaizen.viewmodel.UsageUiState
 import me.ankitgrai.kaizen.viewmodel.UsageViewModel
-import java.time.format.TextStyle
-import java.util.Locale
 import androidx.core.net.toUri
+import me.ankitgrai.kaizen.ui.components.WeeklyUsageChart
 import java.time.ZoneId
+import java.util.Locale
+import androidx.compose.ui.platform.LocalLocale
+import java.time.format.DateTimeFormatter
 
 @Composable
 fun AppDetailsScreen(
@@ -103,10 +105,22 @@ fun AppDetailsContent(
             day
         }
     }
-    val averageUsage = if (correctedHistory.isNotEmpty()) {
-        correctedHistory.sumOf {
+    var selectedDate by remember(packageName) {
+        mutableStateOf<LocalDate?>(null)
+    }
+
+    val selectedDay = correctedHistory.firstOrNull {
+        it.date == selectedDate
+    } ?: correctedHistory.lastOrNull()
+
+    val completedDays = correctedHistory.filter {
+        it.date != today
+    }
+
+    val averageUsage = if (completedDays.isNotEmpty()) {
+        completedDays.sumOf {
             it.totalTimeInForeground
-        } / correctedHistory.size
+        } / completedDays.size
     } else {
         0L
     }
@@ -226,12 +240,62 @@ fun AppDetailsContent(
 
                         else -> {
                             WeeklyUsageChart(
-                                history = correctedHistory
+                                history = correctedHistory,
+                                selectedDate = selectedDay?.date,
+                                onDaySelected = { date ->
+                                    selectedDate = date
+                                }
                             )
+                            selectedDay?.let { day ->
+                                Card(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = MaterialTheme.colorScheme.surfaceVariant
+                                    ),
+                                    shape = RoundedCornerShape(14.dp)
+                                ) {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(14.dp),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Column {
+                                            Text(
+                                                text = day.date.format(
+                                                    DateTimeFormatter.ofPattern(
+                                                        "EEEE, MMM d",
+                                                        LocalLocale.current.platformLocale
+                                                    )
+                                                ),
+                                                style = MaterialTheme.typography.titleSmall,
+                                                fontWeight = FontWeight.SemiBold
+                                            )
+
+                                            Text(
+                                                text = if (day.date == today) {
+                                                    "Today's screen time"
+                                                } else {
+                                                    "Screen time"
+                                                },
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+
+                                        Text(
+                                            text = formatDuration(day.totalTimeInForeground),
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                }
+                            }
                             Spacer(Modifier.height(4.dp))
 
                             Text(
-                                text  ="Average per day: ${formatDuration(averageUsage)}",
+                                text = "Average (previous 6 days): ${formatDuration(averageUsage)}",
                                 style = MaterialTheme.typography.bodyLarge,
                                 fontWeight = FontWeight.Medium
                             )
@@ -259,75 +323,6 @@ fun AppDetailsContent(
     }
 }
 
-@Composable
-private fun WeeklyUsageChart(
-    history: List<DailyAppUsage>
-) {
-    val barColor = MaterialTheme.colorScheme.primary
-    val labelColor = MaterialTheme.colorScheme.onSurfaceVariant
-
-    val maxUsage = history.maxOfOrNull {
-        it.totalTimeInForeground
-    }?.coerceAtLeast(1L) ?: 1L
-
-    Canvas(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(180.dp)
-    ) {
-        val labelSpace = 28.dp.toPx()
-        val chartHeight = size.height - labelSpace
-        val gap = 10.dp.toPx()
-        val barWidth = (
-                (size.width - gap * (history.size - 1)) /
-                        history.size
-                ).coerceAtMost(36.dp.toPx())
-
-        history.forEachIndexed { index, item ->
-            val barHeight =
-                    item.totalTimeInForeground.toFloat() / maxUsage * chartHeight
-
-            val x = index * (barWidth + gap) +
-                    (size.width -
-                            (history.size * barWidth +
-                                    (history.size - 1) * gap)) / 2f
-
-            drawRoundRect(
-                color = barColor,
-                topLeft = androidx.compose.ui.geometry.Offset(
-                    x = x,
-                    y = chartHeight - barHeight
-                ),
-                size = androidx.compose.ui.geometry.Size(
-                    width = barWidth,
-                    height = barHeight.coerceAtLeast(3.dp.toPx())
-                ),
-                cornerRadius = androidx.compose.ui.geometry.CornerRadius(
-                    8.dp.toPx()
-                )
-            )
-
-            val label = item.date.dayOfWeek
-                .getDisplayName(
-                    TextStyle.SHORT,
-                    Locale.getDefault()
-                )
-                .take(2)
-
-            drawContext.canvas.nativeCanvas.drawText(
-                label,
-                x + barWidth / 2f,
-                size.height - 4.dp.toPx(),
-                android.graphics.Paint().apply {
-                    color = labelColor.toArgb()
-                    textSize = 11.dp.toPx()
-                    textAlign = android.graphics.Paint.Align.CENTER
-                    isAntiAlias = true
-                }
-            )
-        }
-    }
-}
 
 private fun formatDuration(milliseconds: Long): String {
     val totalMinutes = milliseconds / 60_000L
