@@ -114,28 +114,6 @@ class UsageStateDataSource (
             }
             .sortedByDescending { it.totalTimeInForeground }
     }
-    fun getAppUsageHistory(
-        packageName: String,
-        days: Int = 7
-    ): List<DailyAppUsage> {
-        require(days > 0) {
-            "Days must be greater than zero"
-        }
-        val zone = ZoneId.systemDefault()
-        val today = LocalDate.now(zone)
-        val totals = screenOnUsageByDay(
-            startDate = today.minusDays((days - 1).toLong()),
-            days = days,
-            packageName = packageName
-        )
-        return totals.map { (date, time) ->
-            DailyAppUsage(
-                date = date,
-                packageName = packageName,
-                totalTimeInForeground = time
-            )
-        }
-    }
     private fun getAppName(packageName: String): String {
         return try {
             val appInfo = context.packageManager.getApplicationInfo(
@@ -151,64 +129,38 @@ class UsageStateDataSource (
         }
     }
 
-    fun getDailyDeviceUsage(days: Int = 90): List<DailyDeviceUsage> {
-        require(days > 0) {
-            "Days must be greater than zero."
-        }
-        val today = LocalDate.now(ZoneId.systemDefault())
-        return screenOnUsageByDay(
-            startDate = today.minusDays((days - 1).toLong()),
-            days = days,
-            packageName = null
-        ).map { (date, time) ->
-            DailyDeviceUsage(
-                date = date,
-                totalUsageMillis = time
-            )
-        }
-    }
-
     /**
-     * Screen-on time for each local day in [startDate, startDate + days).
-     * [packageName] null counts whichever app is resumed, except this app.
-     * A session that crosses midnight is split so each slice stays on its own date.
+     * Screen-on time for the days Android's event log still contains.
+     * A quiet observed day is a real zero. A day with no events is omitted.
      */
-    private fun screenOnUsageByDay(
-        startDate: LocalDate,
-        days: Int,
-        packageName: String?
-    ): Map<LocalDate, Long> {
+    fun observeRecentUsage(days: Int = 14): ObservedUsage {
+        require(days > 0) { "Days must be greater than zero." }
+
         val zone = ZoneId.systemDefault()
-        val rangeStart = startDate.atStartOfDay(zone).toInstant().toEpochMilli()
+        val today = LocalDate.now(zone)
+        val windowStart = today.minusDays((days - 1).toLong())
+        val windowStartMillis = windowStart.atStartOfDay(zone).toInstant().toEpochMilli()
         val now = System.currentTimeMillis()
-        val totals = (0 until days).associate {
-            startDate.plusDays(it.toLong()) to 0L
-        }.toMutableMap()
 
         val events = usageStatsManager.queryEvents(
-            rangeStart - 24 * 60 * 60 * 1000L,
+            windowStartMillis - 24 * 60 * 60 * 1000L,
             now
-        ) ?: return totals
+        ) ?: return ObservedUsage(null, emptyMap(), emptyList())
 
         val event = UsageEvents.Event()
+        var oldestEvent: Long? = null
         var screenOn = false
         var resumedPackage: String? = null
         var countingSince: Long? = null
-
-        fun counts(pkg: String): Boolean {
-            return if (packageName == null) {
-                pkg != context.packageName
-            } else {
-                pkg == packageName
-            }
-        }
+        val deviceSlices = mutableMapOf<LocalDate, Long>()
+        val appSlices = mutableMapOf<Pair<LocalDate, String>, Long>()
 
         fun addElapsed(until: Long) {
             val since = countingSince ?: return
             val pkg = resumedPackage
-            val from = maxOf(since, rangeStart)
+            val from = maxOf(since, windowStartMillis)
             val to = minOf(until, now)
-            if (pkg != null && counts(pkg) && to > from) {
+            if (pkg != null && to > from) {
                 var cursor = from
                 while (cursor < to) {
                     val date = Instant.ofEpochMilli(cursor).atZone(zone).toLocalDate()
@@ -217,8 +169,13 @@ class UsageStateDataSource (
                         .toInstant()
                         .toEpochMilli()
                     val sliceEnd = minOf(to, nextMidnight)
-                    if (date in totals) {
-                        totals[date] = totals.getValue(date) + (sliceEnd - cursor)
+                    val slice = sliceEnd - cursor
+                    if (slice > 0 && !date.isBefore(windowStart) && !date.isAfter(today)) {
+                        if (pkg != context.packageName) {
+                            deviceSlices[date] = (deviceSlices[date] ?: 0L) + slice
+                        }
+                        val key = date to pkg
+                        appSlices[key] = (appSlices[key] ?: 0L) + slice
                     }
                     cursor = sliceEnd
                 }
@@ -235,6 +192,9 @@ class UsageStateDataSource (
         while (events.hasNextEvent()) {
             events.getNextEvent(event)
             val time = event.timeStamp
+            if (oldestEvent == null || time < oldestEvent) {
+                oldestEvent = time
+            }
             when (event.eventType) {
                 UsageEvents.Event.SCREEN_INTERACTIVE -> {
                     screenOn = true
@@ -259,6 +219,35 @@ class UsageStateDataSource (
             }
         }
         addElapsed(now)
-        return totals.toSortedMap()
+
+        val oldest = oldestEvent ?: return ObservedUsage(null, emptyMap(), emptyList())
+        val earliest = maxOf(
+            Instant.ofEpochMilli(oldest).atZone(zone).toLocalDate(),
+            windowStart
+        )
+        if (earliest.isAfter(today)) {
+            return ObservedUsage(null, emptyMap(), emptyList())
+        }
+
+        val deviceTotals = mutableMapOf<LocalDate, Long>()
+        var date = earliest
+        while (!date.isAfter(today)) {
+            deviceTotals[date] = deviceSlices[date] ?: 0L
+            date = date.plusDays(1)
+        }
+        val appTotals = appSlices
+            .filterKeys { (day, _) -> !day.isBefore(earliest) && !day.isAfter(today) }
+            .map { (key, millis) ->
+                AppDayUsage(
+                    date = key.first,
+                    packageName = key.second,
+                    totalUsageMillis = millis
+                )
+            }
+        return ObservedUsage(
+            earliestObserved = earliest,
+            deviceTotals = deviceTotals,
+            appTotals = appTotals
+        )
     }
 }

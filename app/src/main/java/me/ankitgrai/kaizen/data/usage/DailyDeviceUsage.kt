@@ -4,5 +4,6 @@ import java.time.LocalDate
 
 data class DailyDeviceUsage(
     val date: LocalDate,
-    val totalUsageMillis: Long
+    val totalUsageMillis: Long,
+    val recorded: Boolean = true
 )

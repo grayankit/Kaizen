@@ -112,7 +112,8 @@ fun HistoryContent(
     }.map { date ->
         historyByDate[date] ?: DailyDeviceUsage(
             date = date,
-            totalUsageMillis = 0L
+            totalUsageMillis = 0L,
+            recorded = false
         )
     }
 
@@ -387,19 +388,21 @@ fun HistoryContent(
                             )
 
                             Text(
-                                text = if (day.date == today) {
-                                    "Today's screen time"
-                                } else {
-                                    "Screen time"
+                                text = when {
+                                    !day.recorded -> "No usage data saved"
+                                    day.date == today -> "Today's screen time"
+                                    else -> "Screen time"
                                 },
                                 color = HistoryMuted,
                                 fontSize = 12.sp
                             )
 
                             Text(
-                                text = formatHistoryDuration(
-                                    day.totalUsageMillis
-                                ),
+                                text = if (day.recorded) {
+                                    formatHistoryDuration(day.totalUsageMillis)
+                                } else {
+                                    "—"
+                                },
                                 color = HistoryText,
                                 fontSize = 22.sp,
                                 fontWeight = FontWeight.Bold
@@ -442,7 +445,7 @@ private fun HistoryUsageChart(
             modifier = Modifier
                 .fillMaxWidth()
                 .horizontalScroll(rememberScrollState()),
-            verticalAlignment = Alignment.Bottom
+            verticalAlignment = Alignment.Top
         ) {
             days.forEach { day ->
                 val selected = day.date == selectedDate
@@ -450,10 +453,10 @@ private fun HistoryUsageChart(
                         day.totalUsageMillis.toFloat() / maxUsage
                         ).coerceIn(0f, 1f)
 
-                val barHeight = if (day.totalUsageMillis > 0L) {
-                    (130f * fraction).dp
+                val barHeight = if (day.recorded && day.totalUsageMillis > 0L) {
+                    (130f * fraction).dp.coerceAtLeast(4.dp)
                 } else {
-                    3.dp
+                    4.dp
                 }
 
                 Column(
@@ -481,24 +484,26 @@ private fun HistoryUsageChart(
                             .height(130.dp),
                         contentAlignment = Alignment.BottomCenter
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .width(24.dp)
-                                .height(barHeight)
-                                .clip(
-                                    RoundedCornerShape(
-                                        topStart = 7.dp,
-                                        topEnd = 7.dp
+                        if (day.recorded) {
+                            Box(
+                                modifier = Modifier
+                                    .width(24.dp)
+                                    .height(barHeight)
+                                    .clip(
+                                        RoundedCornerShape(
+                                            topStart = 7.dp,
+                                            topEnd = 7.dp
+                                        )
                                     )
-                                )
-                                .background(
-                                    if (selected) {
-                                        barColor
-                                    } else {
-                                        barColor.copy(alpha = 0.65f)
-                                    }
-                                )
-                        )
+                                    .background(
+                                        if (selected) {
+                                            barColor
+                                        } else {
+                                            barColor.copy(alpha = 0.65f)
+                                        }
+                                    )
+                            )
+                        }
                     }
 
                     Spacer(modifier = Modifier.height(8.dp))
@@ -532,6 +537,7 @@ private fun HistoryUsageChart(
 
                     Text(
                         text = label,
+                        modifier = Modifier.height(14.dp),
                         color = if (selected) {
                             MaterialTheme.colorScheme.onSurface
                         } else {
