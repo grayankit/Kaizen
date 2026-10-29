@@ -1,6 +1,9 @@
 package me.ankitgrai.kaizen.navigation
 
 import android.net.Uri
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -86,7 +89,11 @@ fun AppNavigation(){
             startDestination = Routes.OVERVIEW,
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding)
+                .padding(innerPadding),
+            enterTransition = { fadeIn(tween(220)) },
+            exitTransition = { fadeOut(tween(220)) },
+            popEnterTransition = { fadeIn(tween(220)) },
+            popExitTransition = { fadeOut(tween(220)) }
         ){
             composable (Routes.OVERVIEW){
                 OverviewScreen(

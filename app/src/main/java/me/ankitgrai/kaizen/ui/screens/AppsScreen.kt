@@ -3,8 +3,8 @@ package me.ankitgrai.kaizen.ui.screens
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
@@ -12,6 +12,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -24,6 +25,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
 import me.ankitgrai.kaizen.ui.components.AppSearchBar
+import me.ankitgrai.kaizen.ui.components.KaizenPullToRefresh
 import me.ankitgrai.kaizen.ui.components.AppUsageRow
 import me.ankitgrai.kaizen.ui.components.CategoryFilter
 import me.ankitgrai.kaizen.ui.theme.KaizenTheme
@@ -54,6 +56,8 @@ fun AppsScreen(
         mutableStateOf(false)
     }
     val uiState by usageViewModel.uiState.collectAsState()
+    val isRefreshing by usageViewModel.isRefreshing.collectAsState()
+    val scope = rememberCoroutineScope()
     val lifecycleOwner = LocalLifecycleOwner.current
 
     DisposableEffect(lifecycleOwner, usageViewModel) {
@@ -98,111 +102,104 @@ fun AppsScreen(
 
     }
 
-    Column(
+    KaizenPullToRefresh(
+        isRefreshing = isRefreshing,
+        onRefresh = { scope.launch { usageViewModel.refreshAll() } },
+        modifier = Modifier.fillMaxSize()
+    ) {
+    LazyColumn(
         modifier = Modifier
             .fillMaxSize()
-            .verticalScroll(rememberScrollState())
             .padding(horizontal = 20.dp, vertical = 24.dp),
         verticalArrangement = Arrangement.spacedBy(18.dp)
     ) {
-        Column(
-            verticalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            Text(
-                text = "Applications",
-                color = Color(0xFFE6E6F0),
-                fontSize = 25.sp,
-                fontWeight = FontWeight.Bold
-            )
+        item {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(
+                    text = "Applications",
+                    color = Color(0xFFE6E6F0),
+                    fontSize = 25.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = "Understand where your time goes.",
+                    color = Color(0xFFA5A7B8),
+                    fontSize = 12.sp
+                )
+            }
+        }
 
-            Text(
-                text = "Understand where your time goes.",
-                color = Color(0xFFA5A7B8),
-                fontSize = 12.sp
+        item {
+            UsageSummaryCard(
+                totalUsageMillis = uiState.totalUsageMills,
+                appsUsed = uiState.installedApps.count {
+                    it.duration != "0m"
+                }
             )
         }
 
-        UsageSummaryCard(
-            totalUsageMillis = uiState.totalUsageMills,
-            appsUsed = uiState.installedApps.count{
-                it.duration != "0m"
-            }
-        )
-
-        AppSearchBar(
-            query = searchQuery,
-            onQueryChange = {
-                searchQuery = it
-            }
-        )
-
-        Column(
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Text(
-                text = "YOUR APPS",
-                color = Color(0xFFA5A7B8),
-                fontSize = 10.sp,
-                fontWeight = FontWeight.SemiBold
+        item {
+            AppSearchBar(
+                query = searchQuery,
+                onQueryChange = { searchQuery = it }
             )
+        }
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
+        item {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
-                    text = selectedSort,
+                    text = "YOUR APPS",
                     color = Color(0xFFA5A7B8),
                     fontSize = 10.sp,
-                    modifier = Modifier.clickable{
-                        sortMenuExpanded = true
-                    }
+                    fontWeight = FontWeight.SemiBold
                 )
-                DropdownMenu(
-                    expanded = sortMenuExpanded,
-                    onDismissRequest = {
-                        sortMenuExpanded = false
-                    }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    SORT_OPTIONS.forEach { option ->
-                        DropdownMenuItem(
-                            text = {
-                                Text(option)
-                            },
-                            onClick = {
-                                selectedSort = option
-                                sortMenuExpanded = false
-                            }
-                        )
+                    Text(
+                        text = selectedSort,
+                        color = Color(0xFFA5A7B8),
+                        fontSize = 10.sp,
+                        modifier = Modifier.clickable { sortMenuExpanded = true }
+                    )
+                    DropdownMenu(
+                        expanded = sortMenuExpanded,
+                        onDismissRequest = { sortMenuExpanded = false }
+                    ) {
+                        SORT_OPTIONS.forEach { option ->
+                            DropdownMenuItem(
+                                text = { Text(option) },
+                                onClick = {
+                                    selectedSort = option
+                                    sortMenuExpanded = false
+                                }
+                            )
+                        }
                     }
                 }
+                CategoryFilter(
+                    selectedCategory = selectedCategory,
+                    onCategorySelected = { selectedCategory = it }
+                )
             }
-
-
-
-            CategoryFilter(
-                selectedCategory = selectedCategory,
-                onCategorySelected = {
-                    selectedCategory = it
-                }
-            )
         }
-        when{
-            !uiState.hasUsageAccess && !uiState.isLoading ->{
-                Text(
-                    text = "Usage access is required to display app screen time.",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Button(
-                    onClick = {
-                        usageViewModel.openUsageAccessSettings()
+
+        when {
+            !uiState.hasUsageAccess && !uiState.isLoading -> item {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(
+                        text = "Usage access is required to display app screen time.",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Button(onClick = { usageViewModel.openUsageAccessSettings() }) {
+                        Text("Grant usage access")
                     }
-                ) {
-                    Text("Grant usage access")
                 }
             }
-            uiState.isLoading && uiState.installedApps.isEmpty() -> {
+
+            uiState.isLoading && uiState.installedApps.isEmpty() -> item {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -212,44 +209,46 @@ fun AppsScreen(
                     CircularProgressIndicator()
                 }
             }
-            uiState.error != null && uiState.installedApps.isEmpty() -> {
-                Text(
-                    text = uiState.error ?: "Unable to load applications.",
-                    color = MaterialTheme.colorScheme.error
-                )
 
-                Button(
-                    onClick = {
-                        usageViewModel.refresh()
+            uiState.error != null && uiState.installedApps.isEmpty() -> item {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(
+                        text = uiState.error ?: "Unable to load applications.",
+                        color = MaterialTheme.colorScheme.error
+                    )
+                    Button(onClick = { usageViewModel.refresh() }) {
+                        Text("Retry")
                     }
-                ) {
-                    Text("Retry")
                 }
             }
-            filteredApps.isEmpty() ->{
+
+            filteredApps.isEmpty() -> item {
                 Text(
                     text = "No applications found.",
                     color = Color(0xFFA5A7B8),
                     modifier = Modifier.padding(vertical = 24.dp)
                 )
-            }else-> {
-            Column(
-                verticalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                filteredApps.forEach { app ->
-                    AppUsageRow(app = app,
-                        onClick = {
-                            if(app.packageName.isNotBlank()){
-                                onAppClick(app.packageName)
-                            }
+            }
+
+            else -> items(
+                items = filteredApps,
+                key = { it.packageName }
+            ) { app ->
+                AppUsageRow(
+                    app = app,
+                    onClick = {
+                        if (app.packageName.isNotBlank()) {
+                            onAppClick(app.packageName)
                         }
-                    )
-                }
+                    }
+                )
             }
         }
-        }
 
-        Spacer(modifier = Modifier.height(8.dp))
+        item {
+            Spacer(modifier = Modifier.height(8.dp))
+        }
+    }
     }
 }
 

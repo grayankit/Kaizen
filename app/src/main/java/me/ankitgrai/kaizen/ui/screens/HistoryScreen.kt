@@ -1,5 +1,7 @@
 package me.ankitgrai.kaizen.ui.screens
 
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -30,7 +32,9 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -49,6 +53,7 @@ import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import androidx.compose.ui.platform.LocalLocale
 import androidx.compose.ui.tooling.preview.Preview
+import me.ankitgrai.kaizen.ui.components.KaizenPullToRefresh
 import me.ankitgrai.kaizen.viewmodel.HistoryUiState
 
 private val HistoryText = Color(0xFFE6E6F0)
@@ -59,19 +64,25 @@ fun HistoryScreen(
     usageViewModel: UsageViewModel = viewModel()
 ) {
     val historyState by usageViewModel.historyState.collectAsState()
+    val isRefreshing by usageViewModel.isRefreshing.collectAsState()
+    val scope = rememberCoroutineScope()
 
     LaunchedEffect(Unit) {
         usageViewModel.refreshHistory()
     }
 
     HistoryContent(
-        historyState = historyState
+        historyState = historyState,
+        isRefreshing = isRefreshing,
+        onRefresh = { scope.launch { usageViewModel.refreshAll() } }
     )
 }
 
 @Composable
 fun HistoryContent(
-    historyState: HistoryUiState
+    historyState: HistoryUiState,
+    isRefreshing: Boolean = false,
+    onRefresh: () -> Unit = {}
 ) {
     val today = LocalDate.now()
 
@@ -167,6 +178,11 @@ fun HistoryContent(
         )
     }
 
+    KaizenPullToRefresh(
+        isRefreshing = isRefreshing,
+        onRefresh = onRefresh,
+        modifier = Modifier.fillMaxSize()
+    ) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -224,7 +240,7 @@ fun HistoryContent(
             )
 
             Text(
-                text = if (historyState.isLoading) {
+                text = if (historyState.isLoading && historyState.days.isEmpty()) {
                     "Loading..."
                 } else {
                     formatHistoryDuration(totalUsage)
@@ -236,7 +252,7 @@ fun HistoryContent(
 
             Text(
                 text = when {
-                    historyState.isLoading ->
+                    historyState.isLoading && historyState.days.isEmpty() ->
                         "Fetching device usage"
 
                     historyState.error != null ->
@@ -335,7 +351,7 @@ fun HistoryContent(
             )
 
             when {
-                historyState.isLoading -> {
+                historyState.isLoading && historyState.days.isEmpty() -> {
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -415,6 +431,7 @@ fun HistoryContent(
 
         Spacer(modifier = Modifier.height(12.dp))
     }
+    }
 }
 
 @Composable
@@ -453,11 +470,16 @@ private fun HistoryUsageChart(
                         day.totalUsageMillis.toFloat() / maxUsage
                         ).coerceIn(0f, 1f)
 
-                val barHeight = if (day.recorded && day.totalUsageMillis > 0L) {
+                val targetHeight = if (day.recorded && day.totalUsageMillis > 0L) {
                     (130f * fraction).dp.coerceAtLeast(4.dp)
                 } else {
                     4.dp
                 }
+                val barHeight by animateDpAsState(
+                    targetValue = targetHeight,
+                    animationSpec = tween(220),
+                    label = "historyBar"
+                )
 
                 Column(
                     modifier = Modifier

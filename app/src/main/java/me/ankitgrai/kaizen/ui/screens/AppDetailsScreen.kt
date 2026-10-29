@@ -221,7 +221,7 @@ fun AppDetailsContent(
                         fontWeight = FontWeight.SemiBold
                     )
                     when {
-                        detailsState.isLoading -> {
+                        detailsState.isLoading && detailsState.history.isEmpty() -> {
                             CircularProgressIndicator(
                                 modifier = Modifier.align(Alignment.CenterHorizontally)
                             )

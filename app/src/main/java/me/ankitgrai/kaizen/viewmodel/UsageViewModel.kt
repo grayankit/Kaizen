@@ -61,23 +61,50 @@ class UsageViewModel(
         _appDetailsState.asStateFlow()
     val uiState: StateFlow<UsageUiState>  = _uiState.asStateFlow()
 
-    fun refresh(){
+    private val _isRefreshing = MutableStateFlow(false)
+    val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
+
+    fun refresh(force: Boolean = false) {
         viewModelScope.launch {
+            refreshToday(force)
+        }
+    }
+
+    fun refreshHistory(force: Boolean = false, days: Int = 90) {
+        viewModelScope.launch {
+            refreshHistoryNow(force, days)
+        }
+    }
+
+    suspend fun refreshAll() {
+        if (_isRefreshing.value) return
+        _isRefreshing.value = true
+        try {
+            refreshToday(force = true)
+            refreshHistoryNow(force = false)
+        } finally {
+            _isRefreshing.value = false
+        }
+    }
+
+    private suspend fun refreshToday(force: Boolean) {
             val hasAccess  = repository.hasUsageAccess()
             if(!hasAccess){
                 _uiState.value = UsageUiState(
                     hasUsageAccess = false,
                     error = "Usage access is required."
                 )
-                return@launch
+                return
             }
+            val hasContent = _uiState.value.apps.isNotEmpty() ||
+                _uiState.value.installedApps.isNotEmpty()
             _uiState.value = _uiState.value.copy(
-                isLoading = true,
+                isLoading = !hasContent,
                 hasUsageAccess = true,
                 error = null
             )
             try {
-                val usage   = repository.getTodayUsage()
+                val usage = repository.refreshUsage(force)
                 val installed = repository.getInstalledApps()
 
                 val usageByPackage = usage.associateBy {
@@ -122,26 +149,26 @@ class UsageViewModel(
                     error = exception.message?:"Unable to load usage data."
                 )
             }
-        }
     }
 
-    fun refreshHistory(days: Int = 90) {
-        viewModelScope.launch {
-            _historyState.value = HistoryUiState(isLoading = true)
+    private suspend fun refreshHistoryNow(force: Boolean, days: Int = 90) {
+            _historyState.value = _historyState.value.copy(
+                isLoading = _historyState.value.days.isEmpty(),
+                error = null
+            )
 
             try {
                 _historyState.value = HistoryUiState(
                     isLoading = false,
-                    days = repository.getDailyDeviceUsage(days)
+                    days = repository.getDailyDeviceUsage(days, force)
                 )
             } catch (exception: Exception) {
-                _historyState.value = HistoryUiState(
+                _historyState.value = _historyState.value.copy(
                     isLoading = false,
                     error = exception.message
                         ?: "Unable to load usage history."
                 )
             }
-        }
     }
     private fun AppUsageInfo.toAppUsage(totalDailyUsage: Long): AppUsage{
         val colors = listOf(
@@ -220,7 +247,7 @@ class UsageViewModel(
 
     fun loadMostUsed(date: LocalDate, limit: Int = 5) {
         viewModelScope.launch {
-            _dayAppsState.value = DayAppsUiState(
+            _dayAppsState.value = _dayAppsState.value.copy(
                 date = date,
                 isLoading = true
             )
@@ -242,7 +269,10 @@ class UsageViewModel(
 
     fun loadAppDetails(packageName: String){
         viewModelScope.launch {
-            _appDetailsState.value = AppDetailsUiState( true)
+            _appDetailsState.value = _appDetailsState.value.copy(
+                isLoading = _appDetailsState.value.history.isEmpty(),
+                error = null
+            )
 
             try {
                 val history = repository.getAppUsageHistory(
@@ -253,9 +283,9 @@ class UsageViewModel(
                     false,
                     history
                 )
-            }catch (exception: Exception){
-                _appDetailsState.value = AppDetailsUiState(
-                    false,
+            } catch (exception: Exception) {
+                _appDetailsState.value = _appDetailsState.value.copy(
+                    isLoading = false,
                     error = exception.message ?: "Unable to load app usage history."
                 )
             }

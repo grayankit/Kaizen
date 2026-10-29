@@ -11,6 +11,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.produceState
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -25,6 +26,16 @@ import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import androidx.core.graphics.createBitmap
+
+private object IconCache {
+    private val bitmaps = mutableMapOf<String, Bitmap>()
+
+    fun get(packageName: String): Bitmap? = bitmaps[packageName]
+
+    fun put(packageName: String, bitmap: Bitmap) {
+        bitmaps[packageName] = bitmap
+    }
+}
 
 private fun Drawable.toIconBitmap(size: Int = 96): Bitmap {
     val bitmap = createBitmap(size, size)
@@ -52,7 +63,7 @@ fun AppIcon(
         initialValue = null,
         key1 = packageName
     ) {
-        value = withContext(Dispatchers.IO) {
+        value = IconCache.get(packageName) ?: withContext(Dispatchers.IO) {
             if (packageName.isBlank()) {
                 null
             } else {
@@ -60,6 +71,7 @@ fun AppIcon(
                     context.packageManager
                         .getApplicationIcon(packageName)
                         .toIconBitmap()
+                        .also { IconCache.put(packageName, it) }
                 } catch (exception: Exception) {
                     android.util.Log.w(
                         "KaizenAppIcon",
@@ -82,8 +94,9 @@ fun AppIcon(
         val bitmap = bitmapState.value
 
         if (bitmap != null) {
+            val image = remember(bitmap) { bitmap.asImageBitmap() }
             Image(
-                bitmap = bitmap.asImageBitmap(),
+                bitmap = image,
                 contentDescription = "$initials app icon",
                 modifier = Modifier.size(size),
                 contentScale = ContentScale.Fit

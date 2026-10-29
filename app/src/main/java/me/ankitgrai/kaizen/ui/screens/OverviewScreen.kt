@@ -1,5 +1,11 @@
 package me.ankitgrai.kaizen.ui.screens
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -30,6 +36,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -46,7 +53,9 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
 import me.ankitgrai.kaizen.data.usage.DailyDeviceUsage
 import me.ankitgrai.kaizen.ui.components.AppUsageRow
+import me.ankitgrai.kaizen.ui.components.KaizenPullToRefresh
 import me.ankitgrai.kaizen.ui.theme.KaizenTheme
+import kotlinx.coroutines.launch
 import me.ankitgrai.kaizen.viewmodel.UsageViewModel
 import java.time.DayOfWeek
 import java.time.LocalDate
@@ -62,6 +71,8 @@ fun OverviewScreen(
     val uiState by usageViewModel.uiState.collectAsState()
     val historyState by usageViewModel.historyState.collectAsState()
     val dayAppsState by usageViewModel.dayAppsState.collectAsState()
+    val isRefreshing by usageViewModel.isRefreshing.collectAsState()
+    val scope = rememberCoroutineScope()
     var selectedDate by remember { mutableStateOf(LocalDate.now()) }
 
     val lifecycleOwner  = LocalLifecycleOwner.current
@@ -81,6 +92,11 @@ fun OverviewScreen(
 
 
 
+        KaizenPullToRefresh(
+            isRefreshing = isRefreshing,
+            onRefresh = { scope.launch { usageViewModel.refreshAll() } },
+            modifier = Modifier.fillMaxSize()
+        ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -112,7 +128,7 @@ fun OverviewScreen(
 
             UsageSummary(
                 totalUsageMillis = uiState.totalUsageMills,
-                isLoading = uiState.isLoading,
+                isLoading = uiState.isLoading && uiState.totalUsageMills == 0L,
                 hasUsageAccess = uiState.hasUsageAccess,
                 error = uiState.error,
                 onGrantAccess = {
@@ -184,24 +200,33 @@ fun OverviewScreen(
                     }
 
                     else -> {
-                        Column(
-                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                        AnimatedContent(
+                            targetState = dayAppsState.apps.map {
+                                it.packageName to it.totalUsageMillis
+                            },
+                            transitionSpec = {
+                                fadeIn(tween(220)) togetherWith fadeOut(tween(220))
+                            },
+                            label = "mostUsedApps"
                         ) {
-                            dayAppsState.apps.forEach { app ->
-                                AppUsageRow(
-                                    app = app,
-                                    onClick = {
-                                        if (app.packageName.isNotBlank()) {
-                                            onAppClick(app.packageName)
+                            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                dayAppsState.apps.forEach { app ->
+                                    AppUsageRow(
+                                        app = app,
+                                        onClick = {
+                                            if (app.packageName.isNotBlank()) {
+                                                onAppClick(app.packageName)
+                                            }
                                         }
-                                    }
-                                )
+                                    )
+                                }
                             }
                         }
                     }
                 }
 
             }
+        }
         }
     }
 
@@ -347,12 +372,17 @@ fun WeeklyUsageCard(
                         TextStyle.NARROW,
                         LocalLocale.current.platformLocale
                     )
-                    val barHeight = if (day.recorded && day.totalUsageMillis > 0L) {
+                    val targetHeight = if (day.recorded && day.totalUsageMillis > 0L) {
                         (day.totalUsageMillis.toFloat() / maxMillis * 76f).dp
                             .coerceAtLeast(4.dp)
                     } else {
                         4.dp
                     }
+                    val barHeight by animateDpAsState(
+                        targetValue = targetHeight,
+                        animationSpec = tween(220),
+                        label = "overviewBar"
+                    )
 
                     Column(
                         modifier = Modifier
@@ -418,16 +448,25 @@ fun WeeklyUsageCard(
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold
             )
-            Text(
-                text = when {
-                    selectedDay.date.isAfter(today) -> "No usage yet"
-                    !selectedDay.recorded -> "No usage data saved"
-                    else -> formatOverviewDuration(selectedDay.totalUsageMillis)
+            AnimatedContent(
+                targetState = selectedDay.date to selectedDay.totalUsageMillis,
+                transitionSpec = {
+                    fadeIn(tween(220)) togetherWith fadeOut(tween(220))
                 },
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary
-            )
+                label = "selectedDayUsage"
+            ) { (date, millis) ->
+                val recorded = week.firstOrNull { it.date == date }?.recorded == true
+                Text(
+                    text = when {
+                        date.isAfter(today) -> "No usage yet"
+                        !recorded -> "No usage data saved"
+                        else -> formatOverviewDuration(millis)
+                    },
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
         }
     }
 }
