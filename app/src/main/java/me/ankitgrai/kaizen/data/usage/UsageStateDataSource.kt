@@ -11,6 +11,14 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 
+internal val NON_SCREEN_TIME = setOf(
+    "com.samsung.android.emergency",
+    "com.samsung.android.incallui",
+    "com.samsung.android.dialer",
+    "com.android.phone",
+    "com.android.systemui"
+)
+
 class UsageStateDataSource (
     private val context: Context
 ){
@@ -170,10 +178,16 @@ class UsageStateDataSource (
                         .toEpochMilli()
                     val sliceEnd = minOf(to, nextMidnight)
                     val slice = sliceEnd - cursor
-                    if (slice > 0 && !date.isBefore(windowStart) && !date.isAfter(today)) {
-                        if (pkg != context.packageName) {
-                            deviceSlices[date] = (deviceSlices[date] ?: 0L) + slice
-                        }
+                    if (
+                        slice > 0 &&
+                        !date.isBefore(windowStart) &&
+                        !date.isAfter(today) &&
+                        pkg !in NON_SCREEN_TIME
+                    ) {
+                        // Screen time is one clock, including this app and the launcher.
+                        // Phone, in-call, and emergency screens are not counted by
+                        // Digital Wellbeing, so they stay out of the total too.
+                        deviceSlices[date] = (deviceSlices[date] ?: 0L) + slice
                         val key = date to pkg
                         appSlices[key] = (appSlices[key] ?: 0L) + slice
                     }

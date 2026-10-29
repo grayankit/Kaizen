@@ -24,6 +24,7 @@ class UsageRepository (context: Context){
     private var cachedToday: List<AppUsageInfo> = emptyList()
     private var snapshotAt = 0L
     private var snapshotReady = false
+    private var homePackage: String? = null
 
     fun hasUsageAccess(): Boolean{
         return dataSource.hasUsageAccess()
@@ -58,6 +59,7 @@ class UsageRepository (context: Context){
                     )
                 }
                 .distinctBy { it.packageName }
+                .filterNot { isHiddenLauncher(it.packageName) }
                 .sortedBy { it.appName.lowercase() }
                 .also { installedCache = it }
         }
@@ -108,8 +110,14 @@ class UsageRepository (context: Context){
 
     suspend fun getTopAppsForDate(date: LocalDate): List<AppUsageInfo> {
         return withContext(Dispatchers.IO) {
+            val installed = getInstalledApps().map { it.packageName }.toSet()
             historyDao.appsOnDate(date.toString())
-                .filter { it.totalUsageMillis > 0L }
+                .filter {
+                    it.totalUsageMillis > 0L &&
+                        it.packageName in installed &&
+                        it.packageName !in NON_SCREEN_TIME &&
+                        !isHiddenLauncher(it.packageName)
+                }
                 .map {
                     AppUsageInfo(
                         packageName = it.packageName,
@@ -117,6 +125,26 @@ class UsageRepository (context: Context){
                         totalTimeInForeground = it.totalUsageMillis
                     )
                 }
+        }
+    }
+
+    private fun isHiddenLauncher(packageName: String): Boolean {
+        if (packageName in KNOWN_LAUNCHERS) return true
+        val home = homePackage ?: resolveHomePackage().also { homePackage = it }
+        return packageName == home
+    }
+
+    private fun resolveHomePackage(): String? {
+        return try {
+            val intent = Intent(Intent.ACTION_MAIN).apply {
+                addCategory(Intent.CATEGORY_HOME)
+            }
+            appContext.packageManager.resolveActivity(
+                intent,
+                PackageManager.MATCH_DEFAULT_ONLY
+            )?.activityInfo?.packageName
+        } catch (_: Exception) {
+            null
         }
     }
 
@@ -173,7 +201,8 @@ class UsageRepository (context: Context){
                     .filter {
                         it.date == today &&
                             it.totalUsageMillis > 0L &&
-                            it.packageName != appContext.packageName
+                            it.packageName != appContext.packageName &&
+                            !isHiddenLauncher(it.packageName)
                     }
                     .map {
                         AppUsageInfo(
@@ -193,5 +222,12 @@ class UsageRepository (context: Context){
 
     private companion object {
         const val SNAPSHOT_TTL_MS = 60_000L
+        val KNOWN_LAUNCHERS = setOf(
+            "com.sec.android.app.launcher",
+            "com.sec.android.app.desktoplauncher",
+            "com.google.android.apps.nexuslauncher",
+            "com.android.launcher",
+            "com.android.launcher3"
+        )
     }
 }

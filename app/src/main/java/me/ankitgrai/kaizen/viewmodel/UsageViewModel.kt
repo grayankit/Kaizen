@@ -106,14 +106,16 @@ class UsageViewModel(
             try {
                 val usage = repository.refreshUsage(force)
                 val installed = repository.getInstalledApps()
+                val screenTime = repository.getDailyDeviceUsage(days = 1)
+                    .lastOrNull()
+                    ?.totalUsageMillis
+                    ?: 0L
 
                 val usageByPackage = usage.associateBy {
                     it.packageName
                 }
 
-                val totalUsage = usage.sumOf {
-                    it.totalTimeInForeground
-                }
+                val totalUsage = screenTime.coerceAtLeast(1L)
 
                 val usedApps = usage
                     .filter { it.totalTimeInForeground > 0L}
@@ -139,9 +141,7 @@ class UsageViewModel(
                     hasUsageAccess = true,
                     apps = usedApps,
                     installedApps = allApps,
-                    totalUsageMills = usage.sumOf {
-                        it.totalTimeInForeground
-                    }
+                    totalUsageMills = screenTime
                 )
             } catch (exception: Exception){
                 _uiState.value = _uiState.value.copy(
