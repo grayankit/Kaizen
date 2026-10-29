@@ -24,6 +24,15 @@ interface UsageHistoryDao {
     @Query(
         """
         SELECT * FROM daily_app_usage
+        WHERE date = :date
+        ORDER BY totalUsageMillis DESC
+        """
+    )
+    suspend fun appsOnDate(date: String): List<DailyAppUsageEntity>
+
+    @Query(
+        """
+        SELECT * FROM daily_app_usage
         WHERE packageName = :packageName AND date >= :start AND date <= :end
         ORDER BY date
         """

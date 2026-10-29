@@ -1,6 +1,7 @@
 package me.ankitgrai.kaizen.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,7 +15,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
@@ -22,12 +22,15 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -41,15 +44,25 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
-import me.ankitgrai.kaizen.ui.components.AppIcon
-import me.ankitgrai.kaizen.ui.components.AppUsage
+import me.ankitgrai.kaizen.data.usage.DailyDeviceUsage
+import me.ankitgrai.kaizen.ui.components.AppUsageRow
 import me.ankitgrai.kaizen.ui.theme.KaizenTheme
 import me.ankitgrai.kaizen.viewmodel.UsageViewModel
+import java.time.DayOfWeek
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
+import java.time.format.TextStyle
+import androidx.compose.ui.platform.LocalLocale
 
 @Composable
-fun OverviewScreen() {
+fun OverviewScreen(
+    onAppClick: (String) -> Unit = {}
+) {
     val usageViewModel: UsageViewModel = viewModel()
     val uiState by usageViewModel.uiState.collectAsState()
+    val historyState by usageViewModel.historyState.collectAsState()
+    val dayAppsState by usageViewModel.dayAppsState.collectAsState()
+    var selectedDate by remember { mutableStateOf(LocalDate.now()) }
 
     val lifecycleOwner  = LocalLifecycleOwner.current
 
@@ -57,6 +70,7 @@ fun OverviewScreen() {
         val observer = LifecycleEventObserver{_, event ->
             if(event == Lifecycle.Event.ON_RESUME){
                 usageViewModel.refresh()
+                usageViewModel.refreshHistory()
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -110,7 +124,15 @@ fun OverviewScreen() {
             )
 
             // Weekly chart
-            WeeklyUsageCard()
+            WeeklyUsageCard(
+                days = historyState.days,
+                selectedDate = selectedDate,
+                onDaySelected = { selectedDate = it }
+            )
+
+            LaunchedEffect(selectedDate, historyState.days) {
+                usageViewModel.loadMostUsed(selectedDate)
+            }
 
             // Most used applications
             Column(
@@ -123,12 +145,23 @@ fun OverviewScreen() {
                 )
 
                 Text(
-                    text = "Your top apps today",
+                    text = if (selectedDate == LocalDate.now()) {
+                        "Your top apps today"
+                    } else {
+                        "Your top apps on ${
+                            selectedDate.format(
+                                DateTimeFormatter.ofPattern(
+                                    "EEE, MMM d",
+                                    LocalLocale.current.platformLocale
+                                )
+                            )
+                        }"
+                    },
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 when {
-                    !uiState.hasUsageAccess ->{
+                    !uiState.hasUsageAccess -> {
                         Text(
                             text = "Grant usage access to see your applications.",
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -136,34 +169,35 @@ fun OverviewScreen() {
                         )
                     }
 
-                    uiState.isLoading ->{
+                    dayAppsState.isLoading && dayAppsState.apps.isEmpty() -> {
                         CircularProgressIndicator(
                             modifier = Modifier.size(28.dp),
                             color = MaterialTheme.colorScheme.primary
                         )
                     }
-                    uiState.error != null ->{
-                        Text(
-                            text = uiState.error ?: "Unable to load usage data.",
-                            color = MaterialTheme.colorScheme.error
-                        )
 
-                        Button(onClick = {
-                            usageViewModel.refresh()
-                        }) {
-                            Text("Retry")
-                        }
-                    }
-                    uiState.apps.isEmpty() -> {
+                    dayAppsState.apps.isEmpty() -> {
                         Text(
-                            text = "No application usage recorded yet.",
+                            text = "No application usage recorded for this day.",
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
-                    else ->{
-                        AppUsageList(
-                            apps = uiState.apps.take(5)
-                        )
+
+                    else -> {
+                        Column(
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            dayAppsState.apps.forEach { app ->
+                                AppUsageRow(
+                                    app = app,
+                                    onClick = {
+                                        if (app.packageName.isNotBlank()) {
+                                            onAppClick(app.packageName)
+                                        }
+                                    }
+                                )
+                            }
+                        }
                     }
                 }
 
@@ -248,21 +282,26 @@ fun UsageSummary(
 }
 
 @Composable
-fun WeeklyUsageCard() {
-    data class DayUsage(
-        val day: String,
-        val hours: Float
-    )
+fun WeeklyUsageCard(
+    days: List<DailyDeviceUsage>,
+    selectedDate: LocalDate,
+    onDaySelected: (LocalDate) -> Unit
+) {
 
-    val days = listOf(
-        DayUsage("S", 3.2f),
-        DayUsage("M", 4.1f),
-        DayUsage("T", 5.0f),
-        DayUsage("W", 3.8f),
-        DayUsage("T", 4.7f),
-        DayUsage("F", 4.63f),
-        DayUsage("S", 2.1f)
-    )
+    val today = LocalDate.now()
+    val start = today.with (DayOfWeek.MONDAY)
+    val byDate = days.associateBy { it.date }
+    val week = (0..6).map { offset ->
+        val date = start.plusDays(offset.toLong())
+        byDate[date] ?: DailyDeviceUsage(
+            date = date,
+            totalUsageMillis = 0L,
+            recorded = false
+        )
+    }
+    val maxMillis = week.maxOf { it.totalUsageMillis }.coerceAtLeast(1L)
+    val selectedDay = week.firstOrNull { it.date == selectedDate }
+        ?: week.last { !it.date.isAfter(today) }
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -302,48 +341,64 @@ fun WeeklyUsageCard() {
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
                 verticalAlignment = Alignment.Bottom
             ) {
-                days.forEachIndexed { index, day ->
-
-                    val isToday = index == 5
+                week.forEach { day ->
+                    val selected = day.date == selectedDay.date
+                    val label = day.date.dayOfWeek.getDisplayName(
+                        TextStyle.NARROW,
+                        LocalLocale.current.platformLocale
+                    )
+                    val barHeight = if (day.recorded && day.totalUsageMillis > 0L) {
+                        (day.totalUsageMillis.toFloat() / maxMillis * 76f).dp
+                            .coerceAtLeast(4.dp)
+                    } else {
+                        4.dp
+                    }
 
                     Column(
                         modifier = Modifier
                             .weight(1f)
-                            .fillMaxHeight(),
+                            .fillMaxHeight()
+                            .clip(RoundedCornerShape(12.dp))
+                            .clickable(enabled = !day.date.isAfter(today)) {
+                                onDaySelected(day.date)
+                            },
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.Bottom
                     ) {
-
-                        Box(
-                            modifier = Modifier
-                                .width(22.dp)
-                                .height((day.hours / 6f * 76f).dp)
-                                .clip(
-                                    RoundedCornerShape(
-                                        topStart = 8.dp,
-                                        topEnd = 8.dp
+                        if (day.recorded) {
+                            Box(
+                                modifier = Modifier
+                                    .width(22.dp)
+                                    .height(barHeight)
+                                    .clip(
+                                        RoundedCornerShape(
+                                            topStart = 8.dp,
+                                            topEnd = 8.dp
+                                        )
                                     )
-                                )
-                                .background(
-                                    if (isToday) {
-                                        MaterialTheme.colorScheme.primary
-                                    } else {
-                                        Color(0xFF454E43)
-                                    }
-                                )
-                        )
+                                    .background(
+                                        if (selected) {
+                                            MaterialTheme.colorScheme.primary
+                                        } else {
+                                            Color(0xFF454E43)
+                                        }
+                                    )
+                            )
+                        } else {
+                            Spacer(modifier = Modifier.height(4.dp))
+                        }
 
                         Spacer(modifier = Modifier.height(10.dp))
 
                         Text(
-                            text = day.day,
+                            text = label,
                             style = MaterialTheme.typography.labelMedium,
-                            color = if (isToday) {
+                            color = if (selected) {
                                 MaterialTheme.colorScheme.primary
                             } else {
                                 MaterialTheme.colorScheme.onSurfaceVariant
                             },
-                            fontWeight = if (isToday) {
+                            fontWeight = if (selected) {
                                 FontWeight.Bold
                             } else {
                                 FontWeight.Normal
@@ -352,114 +407,39 @@ fun WeeklyUsageCard() {
                     }
                 }
             }
-        }
-    }
-}
 
-@Composable
-fun AppUsageList(apps: List<AppUsage>) {
-
-
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(24.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
-        )
-    ) {
-        Column(
-            modifier = Modifier.padding(
-                horizontal = 16.dp,
-                vertical = 4.dp
-            )
-        ) {
-            apps.forEachIndexed { index, app ->
-
-                Column(
-                    modifier = Modifier.padding(vertical = 14.dp)
-                ) {
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Surface(
-                            shape = RoundedCornerShape(14.dp),
-                            color = app.color.copy(alpha = 0.15f)
-                        ) {
-                            AppIcon(
-                                packageName = app.packageName,
-                                initials = app.initials,
-                                color = app.color,
-                                size = 48.dp
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.width(12.dp))
-
-                        Column(
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Text(
-                                text = app.name,
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.SemiBold
-                            )
-
-                            Spacer(modifier = Modifier.height(3.dp))
-
-                            Text(
-                                text = app.category,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-
-                        Text(
-                            text = app.duration,
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    UsageProgress(
-                        progress = app.usageProgress,
-                        color = app.color,
-                        trackColor = MaterialTheme.colorScheme.surfaceVariant
+            Text(
+                text = selectedDay.date.format(
+                    DateTimeFormatter.ofPattern(
+                        "EEEE, MMM d",
+                        LocalLocale.current.platformLocale
                     )
-                }
-
-                if (index != apps.lastIndex) {
-                    Spacer(modifier = Modifier.height(2.dp))
-                }
-            }
+                ),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold
+            )
+            Text(
+                text = when {
+                    selectedDay.date.isAfter(today) -> "No usage yet"
+                    !selectedDay.recorded -> "No usage data saved"
+                    else -> formatOverviewDuration(selectedDay.totalUsageMillis)
+                },
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary
+            )
         }
     }
 }
 
-@Composable
-fun UsageProgress(
-    progress: Float,
-    color: Color,
-    trackColor: Color,
-    modifier: Modifier = Modifier
-) {
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .height(6.dp)
-            .clip(CircleShape)
-            .background(trackColor)
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth(progress.coerceIn(0f, 1f))
-                .fillMaxHeight()
-                .clip(CircleShape)
-                .background(color)
-        )
+private fun formatOverviewDuration(milliseconds: Long): String {
+    val totalMinutes = milliseconds / 60_000L
+    val hours = totalMinutes / 60
+    val minutes = totalMinutes % 60
+    return if (hours > 0) {
+        "${hours}h ${minutes}m"
+    } else {
+        "${minutes}m"
     }
 }
 

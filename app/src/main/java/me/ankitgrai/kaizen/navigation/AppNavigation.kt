@@ -89,7 +89,13 @@ fun AppNavigation(){
                 .padding(innerPadding)
         ){
             composable (Routes.OVERVIEW){
-                OverviewScreen()
+                OverviewScreen(
+                    onAppClick = { packageName ->
+                        navController.navigate(
+                            "app_details/${Uri.encode(packageName)}"
+                        )
+                    }
+                )
             }
             composable(Routes.APPS) {
                 AppsScreen(

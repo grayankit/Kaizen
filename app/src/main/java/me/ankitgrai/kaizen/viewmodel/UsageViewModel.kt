@@ -14,6 +14,7 @@ import me.ankitgrai.kaizen.data.usage.DailyDeviceUsage
 import me.ankitgrai.kaizen.data.usage.InstalledAppInfo
 import me.ankitgrai.kaizen.data.usage.UsageRepository
 import me.ankitgrai.kaizen.ui.components.AppUsage
+import java.time.LocalDate
 
 data class UsageUiState(
     val isLoading: Boolean = false,
@@ -29,6 +30,12 @@ data class AppDetailsUiState(
     val error: String? = null
 )
 
+data class DayAppsUiState(
+    val date: LocalDate? = null,
+    val isLoading: Boolean = false,
+    val apps: List<AppUsage> = emptyList()
+)
+
 data class HistoryUiState(
     val isLoading: Boolean = false,
     val days: List<DailyDeviceUsage> = emptyList(),
@@ -42,6 +49,9 @@ class UsageViewModel(
     private val _uiState  = MutableStateFlow(UsageUiState())
 
     private val _appDetailsState = MutableStateFlow(AppDetailsUiState())
+
+    private val _dayAppsState = MutableStateFlow(DayAppsUiState())
+    val dayAppsState: StateFlow<DayAppsUiState> = _dayAppsState.asStateFlow()
 
     private val _historyState = MutableStateFlow(HistoryUiState())
 
@@ -206,6 +216,28 @@ class UsageViewModel(
     }
     fun openUsageAccessSettings(){
         repository.openUsageAccessSettings()
+    }
+
+    fun loadMostUsed(date: LocalDate, limit: Int = 5) {
+        viewModelScope.launch {
+            _dayAppsState.value = DayAppsUiState(
+                date = date,
+                isLoading = true
+            )
+            try {
+                val apps = repository.getTopAppsForDate(date)
+                val total = apps.sumOf { it.totalTimeInForeground }.coerceAtLeast(1L)
+                _dayAppsState.value = DayAppsUiState(
+                    date = date,
+                    apps = apps
+                        .map { it.toAppUsage(total) }
+                        .sortedByDescending { it.totalUsageMillis }
+                        .take(limit)
+                )
+            } catch (exception: Exception) {
+                _dayAppsState.value = DayAppsUiState(date = date)
+            }
+        }
     }
 
     fun loadAppDetails(packageName: String){

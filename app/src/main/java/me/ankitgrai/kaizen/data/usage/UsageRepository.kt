@@ -98,6 +98,29 @@ class UsageRepository (context: Context){
         }
     }
 
+    suspend fun getTopAppsForDate(date: LocalDate): List<AppUsageInfo> {
+        return withContext(Dispatchers.IO) {
+            historyDao.appsOnDate(date.toString())
+                .filter { it.totalUsageMillis > 0L }
+                .map {
+                    AppUsageInfo(
+                        packageName = it.packageName,
+                        appName = appLabel(it.packageName),
+                        totalTimeInForeground = it.totalUsageMillis
+                    )
+                }
+        }
+    }
+
+    private fun appLabel(packageName: String): String {
+        return try {
+            val info = appContext.packageManager.getApplicationInfo(packageName, 0)
+            appContext.packageManager.getApplicationLabel(info).toString()
+        } catch (_: Exception) {
+            packageName
+        }
+    }
+
     private suspend fun refreshStoredHistory() {
         if (!dataSource.hasUsageAccess()) return
         val observed = dataSource.observeRecentUsage(days = 14)
