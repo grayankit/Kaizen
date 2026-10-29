@@ -117,13 +117,13 @@ fun AppsScreen(
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(
                     text = "Applications",
-                    color = Color(0xFFE6E6F0),
+                    color = MaterialTheme.colorScheme.onSurface,
                     fontSize = 25.sp,
                     fontWeight = FontWeight.Bold
                 )
                 Text(
                     text = "Understand where your time goes.",
-                    color = Color(0xFFA5A7B8),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontSize = 12.sp
                 )
             }
@@ -149,7 +149,7 @@ fun AppsScreen(
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
                     text = "YOUR APPS",
-                    color = Color(0xFFA5A7B8),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontSize = 10.sp,
                     fontWeight = FontWeight.SemiBold
                 )
@@ -160,7 +160,7 @@ fun AppsScreen(
                 ) {
                     Text(
                         text = selectedSort,
-                        color = Color(0xFFA5A7B8),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontSize = 10.sp,
                         modifier = Modifier.clickable { sortMenuExpanded = true }
                     )
@@ -225,7 +225,7 @@ fun AppsScreen(
             filteredApps.isEmpty() -> item {
                 Text(
                     text = "No applications found.",
-                    color = Color(0xFFA5A7B8),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(vertical = 24.dp)
                 )
             }
@@ -274,21 +274,21 @@ private fun UsageSummaryCard(
         ) {
             Text(
                 text = "TOTAL USAGE TODAY",
-                color = Color(0xFFA5A7B8),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 fontSize = 10.sp,
                 fontWeight = FontWeight.SemiBold
             )
 
             Text(
                 text = formattedUsage,
-                color = Color(0xFFE6E6F0),
+                color = MaterialTheme.colorScheme.onSurface,
                 fontSize = 27.sp,
                 fontWeight = FontWeight.Bold
             )
 
             Text(
                 text = "$appsUsed apps used",
-                color = Color(0xFFA5A7B8),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 fontSize = 11.sp
             )
         }
@@ -299,14 +299,14 @@ private fun UsageSummaryCard(
         ) {
             Text(
                 text = "↓ 18%",
-                color = Color(0xFF9DD5D9),
+                color = MaterialTheme.colorScheme.primary,
                 fontSize = 15.sp,
                 fontWeight = FontWeight.SemiBold
             )
 
             Text(
                 text = "vs yesterday",
-                color = Color(0xFFA5A7B8),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 fontSize = 10.sp
             )
         }

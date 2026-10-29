@@ -20,6 +20,7 @@ import androidx.compose.material.icons.outlined.Apps
 import androidx.compose.material.icons.outlined.Dashboard
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -46,9 +47,9 @@ fun FloatingNavigationBar(
     onScreenSelected: (CurrentScreen) -> Unit,
     modifier: Modifier = Modifier
 ){
-    val borderColor  = Color(0xFF41494B)
-    val activeColor = Color(0xFF203F42)
-    val iconColor = Color(0xFF9DD5D9)
+    val borderColor = MaterialTheme.colorScheme.outline
+    val activeColor = MaterialTheme.colorScheme.primaryContainer
+    val iconColor = MaterialTheme.colorScheme.primary
 
     Row (
         modifier = modifier

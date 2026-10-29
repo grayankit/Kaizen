@@ -54,10 +54,10 @@ import java.time.format.DateTimeFormatter
 import androidx.compose.ui.platform.LocalLocale
 import androidx.compose.ui.tooling.preview.Preview
 import me.ankitgrai.kaizen.ui.components.KaizenPullToRefresh
+import me.ankitgrai.kaizen.ui.theme.chartSurfaceColor
 import me.ankitgrai.kaizen.viewmodel.HistoryUiState
 
-private val HistoryText = Color(0xFFE6E6F0)
-private val HistoryMuted = Color(0xFFA5A7B8)
+
 
 @Composable
 fun HistoryScreen(
@@ -196,14 +196,14 @@ fun HistoryContent(
         ) {
             Text(
                 text = "History",
-                color = HistoryText,
+                color = MaterialTheme.colorScheme.onSurface,
                 fontSize = 25.sp,
                 fontWeight = FontWeight.Bold
             )
 
             Text(
                 text = "Understand where your time goes.",
-                color = HistoryMuted,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 fontSize = 12.sp
             )
         }
@@ -224,7 +224,7 @@ fun HistoryContent(
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(20.dp))
-                .background(MaterialTheme.colorScheme.surfaceVariant)
+                .background(chartSurfaceColor())
                 .padding(18.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
@@ -234,7 +234,7 @@ fun HistoryContent(
                     UsagePeriod.WEEK -> "WEEKLY USAGE"
                     UsagePeriod.MONTH -> "MONTHLY USAGE"
                 },
-                color = HistoryMuted,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 fontSize = 10.sp,
                 fontWeight = FontWeight.SemiBold
             )
@@ -245,7 +245,7 @@ fun HistoryContent(
                 } else {
                     formatHistoryDuration(totalUsage)
                 },
-                color = HistoryText,
+                color = MaterialTheme.colorScheme.onSurface,
                 fontSize = 27.sp,
                 fontWeight = FontWeight.Bold
             )
@@ -268,7 +268,7 @@ fun HistoryContent(
                 color = if (historyState.error != null) {
                     MaterialTheme.colorScheme.error
                 } else {
-                    HistoryMuted
+                    MaterialTheme.colorScheme.onSurfaceVariant
                 },
                 fontSize = 11.sp
             )
@@ -279,7 +279,7 @@ fun HistoryContent(
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(15.dp))
-                .background(Color(0xFF9DD5D9))
+                .background(MaterialTheme.colorScheme.primary)
                 .padding(horizontal = 12.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
@@ -287,7 +287,7 @@ fun HistoryContent(
             Icon(
                 imageVector = Icons.AutoMirrored.Outlined.ArrowLeft,
                 contentDescription = "Previous period",
-                tint = Color(0xFF203F42),
+                tint = MaterialTheme.colorScheme.onPrimary,
                 modifier = Modifier.clickable {
                     periodDate = when (selectedPeriod) {
                         UsagePeriod.DAY -> periodDate.minusDays(1)
@@ -300,7 +300,7 @@ fun HistoryContent(
 
             Text(
                 text = periodLabel,
-                color = Color(0xFF203F42),
+                color = MaterialTheme.colorScheme.onPrimary,
                 fontSize = 11.sp,
                 fontWeight = FontWeight.SemiBold
             )
@@ -317,9 +317,9 @@ fun HistoryContent(
                 imageVector = Icons.AutoMirrored.Outlined.ArrowRight,
                 contentDescription = "Next period",
                 tint = if (canGoForward) {
-                    Color(0xFF203F42)
+                    MaterialTheme.colorScheme.onPrimary
                 } else {
-                    Color(0x80203F42)
+                    MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.5f)
                 },
                 modifier = Modifier.clickable(
                     enabled = canGoForward
@@ -335,7 +335,7 @@ fun HistoryContent(
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(20.dp))
-                .background(MaterialTheme.colorScheme.surface)
+                .background(chartSurfaceColor())
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
@@ -345,7 +345,7 @@ fun HistoryContent(
                     UsagePeriod.WEEK -> "Daily screen time"
                     UsagePeriod.MONTH -> "Usage by day"
                 },
-                color = HistoryText,
+                color = MaterialTheme.colorScheme.onSurface,
                 fontSize = 16.sp,
                 fontWeight = FontWeight.SemiBold
             )
@@ -386,9 +386,7 @@ fun HistoryContent(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clip(RoundedCornerShape(14.dp))
-                                .background(
-                                    MaterialTheme.colorScheme.surfaceVariant
-                                )
+                                .background(chartSurfaceColor(0.16f))
                                 .padding(14.dp),
                             verticalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
@@ -399,7 +397,7 @@ fun HistoryContent(
                                         LocalLocale.current.platformLocale
                                     )
                                 ),
-                                color = HistoryText,
+                                color = MaterialTheme.colorScheme.onSurface,
                                 fontWeight = FontWeight.SemiBold
                             )
 
@@ -409,7 +407,7 @@ fun HistoryContent(
                                     day.date == today -> "Today's screen time"
                                     else -> "Screen time"
                                 },
-                                color = HistoryMuted,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 fontSize = 12.sp
                             )
 
@@ -419,7 +417,7 @@ fun HistoryContent(
                                 } else {
                                     "—"
                                 },
-                                color = HistoryText,
+                                color = MaterialTheme.colorScheme.onSurface,
                                 fontSize = 22.sp,
                                 fontWeight = FontWeight.Bold
                             )

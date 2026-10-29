@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -48,14 +49,22 @@ fun CategoryFilter(
             val selected = category == selectedCategory
             Text(
                 text = category,
-                color = if(selected) Color (0xFF9DD5D9) else Color(0xFFA5A7B8),
+                color = if (selected) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
                 fontSize = 12.sp,
                 fontWeight = if(selected) FontWeight.SemiBold else FontWeight.Normal,
                 maxLines = 1,
                 modifier = Modifier
                     .clip(RoundedCornerShape(50))
                     .background(
-                        if(selected) Color(0xFF203F42) else Color(0xFF203F42)
+                        if (selected) {
+                            MaterialTheme.colorScheme.primaryContainer
+                        } else {
+                            MaterialTheme.colorScheme.surfaceContainerHigh
+                        }
                     )
                     .clickable {
                         onCategorySelected(category)

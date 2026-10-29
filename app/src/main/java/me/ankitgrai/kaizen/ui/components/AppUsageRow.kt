@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -23,6 +24,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import me.ankitgrai.kaizen.ui.theme.KaizenTheme
+import me.ankitgrai.kaizen.ui.theme.chartSurfaceColor
 
 data class AppUsage(
     val name: String,
@@ -45,7 +47,7 @@ fun AppUsageRow(
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(17.dp))
-            .background(Color(0xFF171923))
+            .background(chartSurfaceColor())
             .clickable(onClick = onClick)
             .padding(12.dp)
     ) {
@@ -65,7 +67,7 @@ fun AppUsageRow(
             ) {
                 Text(
                     text = app.name,
-                    color = Color(0xFFE6E6F0),
+                    color = MaterialTheme.colorScheme.onSurface,
                     fontSize = 13.sp,
                     fontWeight = FontWeight.SemiBold,
                     maxLines = 1
@@ -73,7 +75,7 @@ fun AppUsageRow(
                 Spacer(modifier = Modifier.width(4.dp))
                 Text(
                     text = app.category,
-                    color = Color(0xFFA5A7B8),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontSize = 11.sp,
                     maxLines = 1
                 )
@@ -83,13 +85,13 @@ fun AppUsageRow(
             ) {
                 Text(
                     text = app.duration,
-                    color = Color(0xFFE6E6F0),
+                    color = MaterialTheme.colorScheme.onSurface,
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Bold
                 )
                 Text(
                     text = "${(app.usageProgress.coerceIn(0f, 1f) * 100).toInt()}%",
-                    color = Color(0xFFA5A7B8),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontSize = 10.sp
                 )
             }
@@ -101,7 +103,7 @@ fun AppUsageRow(
             .fillMaxWidth()
             .height(4.dp)
             .clip(RoundedCornerShape(50))
-            .background(Color(0xFF353844)))
+            .background(MaterialTheme.colorScheme.surfaceVariant))
         {
             Box(
                 modifier = Modifier

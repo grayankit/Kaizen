@@ -5,6 +5,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -31,7 +32,7 @@ fun PeriodSelector(
     Row(
         modifier = modifier
             .background(
-                Color(0xFF171923),
+                MaterialTheme.colorScheme.surfaceContainerHigh,
                 RoundedCornerShape(18.dp)
             )
             .padding(4.dp),
@@ -45,7 +46,7 @@ fun PeriodSelector(
                     .weight(1f)
                     .background(
                         color = if (selected) {
-                            Color(0xFF203F42)
+                            MaterialTheme.colorScheme.primaryContainer
                         } else {
                             Color.Transparent
                         },
@@ -64,9 +65,9 @@ fun PeriodSelector(
                     text = period.name.lowercase()
                         .replaceFirstChar { it.uppercase() },
                     color = if (selected) {
-                        Color(0xFF9DD5D9)
+                        MaterialTheme.colorScheme.primary
                     } else {
-                        Color(0xFFA5A7B8)
+                        MaterialTheme.colorScheme.onSurfaceVariant
                     },
                     fontSize = 11.sp,
                     fontWeight = if (selected) {

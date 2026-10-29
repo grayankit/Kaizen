@@ -87,8 +87,7 @@ fun AppIcon(
     Box(
         modifier = modifier
             .size(size)
-            .clip(RoundedCornerShape(13.dp))
-            .background(color.copy(alpha = 0.18f)),
+            .clip(RoundedCornerShape(13.dp)),
         contentAlignment = Alignment.Center
     ) {
         val bitmap = bitmapState.value

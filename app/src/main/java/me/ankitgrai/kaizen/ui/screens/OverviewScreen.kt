@@ -23,16 +23,18 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -41,62 +43,93 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalLocale
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import me.ankitgrai.kaizen.ui.components.CircularUsageIndicator
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleEventObserver
-import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.compose.LifecycleEventEffect
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import kotlinx.coroutines.launch
 import me.ankitgrai.kaizen.data.usage.DailyDeviceUsage
 import me.ankitgrai.kaizen.ui.components.AppUsageRow
+import me.ankitgrai.kaizen.ui.components.CircularUsageIndicator
 import me.ankitgrai.kaizen.ui.components.KaizenPullToRefresh
-import me.ankitgrai.kaizen.ui.theme.KaizenTheme
-import kotlinx.coroutines.launch
+import me.ankitgrai.kaizen.ui.theme.chartSurfaceColor
+import me.ankitgrai.kaizen.viewmodel.DayAppsUiState
+import me.ankitgrai.kaizen.viewmodel.HistoryUiState
+import me.ankitgrai.kaizen.viewmodel.UsageUiState
 import me.ankitgrai.kaizen.viewmodel.UsageViewModel
 import java.time.DayOfWeek
 import java.time.LocalDate
+import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
-import androidx.compose.ui.platform.LocalLocale
+
+private const val TARGET_DAILY_USAGE_MILLIS = 6 * 60 * 60 * 1000f // 6 Hours
+private val MAX_BAR_HEIGHT_DP = 76.dp
 
 @Composable
 fun OverviewScreen(
-    onAppClick: (String) -> Unit = {}
+    onAppClick: (String) -> Unit = {},
+    onOpenSettings: () -> Unit = {},
+    usageViewModel: UsageViewModel = viewModel()
 ) {
-    val usageViewModel: UsageViewModel = viewModel()
-    val uiState by usageViewModel.uiState.collectAsState()
-    val historyState by usageViewModel.historyState.collectAsState()
-    val dayAppsState by usageViewModel.dayAppsState.collectAsState()
-    val isRefreshing by usageViewModel.isRefreshing.collectAsState()
+    val uiState by usageViewModel.uiState.collectAsStateWithLifecycle()
+    val historyState by usageViewModel.historyState.collectAsStateWithLifecycle()
+    val dayAppsState by usageViewModel.dayAppsState.collectAsStateWithLifecycle()
+    val isRefreshing by usageViewModel.isRefreshing.collectAsStateWithLifecycle()
+
     val scope = rememberCoroutineScope()
     var selectedDate by remember { mutableStateOf(LocalDate.now()) }
 
-    val lifecycleOwner  = LocalLifecycleOwner.current
-
-    DisposableEffect(lifecycleOwner,usageViewModel) {
-        val observer = LifecycleEventObserver{_, event ->
-            if(event == Lifecycle.Event.ON_RESUME){
-                usageViewModel.refresh()
-                usageViewModel.refreshHistory()
-            }
-        }
-        lifecycleOwner.lifecycle.addObserver(observer)
-        onDispose {
-            lifecycleOwner.lifecycle.removeObserver(observer)
-        }
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
+        usageViewModel.refresh()
+        usageViewModel.refreshHistory()
     }
 
+    LaunchedEffect(selectedDate, historyState.days) {
+        usageViewModel.loadMostUsed(selectedDate)
+    }
 
+    OverviewContent(
+        uiState = uiState,
+        historyState = historyState,
+        dayAppsState = dayAppsState,
+        isRefreshing = isRefreshing,
+        selectedDate = selectedDate,
+        onDateSelected = { selectedDate = it },
+        onRefreshAll = { scope.launch { usageViewModel.refreshAll() } },
+        onGrantAccess = { usageViewModel.openUsageAccessSettings() },
+        onRefreshUsage = { usageViewModel.refresh() },
+        onAppClick = onAppClick,
+        onOpenSettings = onOpenSettings
+    )
+}
 
-        KaizenPullToRefresh(
-            isRefreshing = isRefreshing,
-            onRefresh = { scope.launch { usageViewModel.refreshAll() } },
-            modifier = Modifier.fillMaxSize()
-        ) {
+@Composable
+fun OverviewContent(
+    uiState: UsageUiState,
+    historyState: HistoryUiState,
+    dayAppsState: DayAppsUiState,
+    isRefreshing: Boolean,
+    selectedDate: LocalDate,
+    onDateSelected: (LocalDate) -> Unit,
+    onRefreshAll: () -> Unit,
+    onGrantAccess: () -> Unit,
+    onRefreshUsage: () -> Unit,
+    onAppClick: (String) -> Unit,
+    onOpenSettings: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    KaizenPullToRefresh(
+        isRefreshing = isRefreshing,
+        onRefresh = onRefreshAll,
+        modifier = modifier.fillMaxSize()
+    ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -104,78 +137,76 @@ fun OverviewScreen(
                 .padding(horizontal = 20.dp, vertical = 24.dp),
             verticalArrangement = Arrangement.spacedBy(24.dp)
         ) {
-
             // Header
-            Column {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
                 Text(
-                    text = "Good Evening",
+                    text = getGreetingMessage(),
                     style = MaterialTheme.typography.headlineLarge,
                     color = MaterialTheme.colorScheme.primary,
                     fontWeight = FontWeight.Bold,
                     letterSpacing = 3.sp
                 )
-
-
-                Spacer(modifier = Modifier.height(6.dp))
-
-                Text(
-                    text = "Here's how you've spent your time today.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                IconButton(onClick = onOpenSettings) {
+                    Icon(
+                        imageVector = Icons.Outlined.Settings,
+                        contentDescription = "Settings",
+                        tint = MaterialTheme.colorScheme.onSurface
+                    )
+                }
             }
-            Spacer(modifier = Modifier.height(12.dp))
+
+            Text(
+                text = "Here's how you've spent your time today.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
 
             UsageSummary(
                 totalUsageMillis = uiState.totalUsageMills,
                 isLoading = uiState.isLoading && uiState.totalUsageMills == 0L,
                 hasUsageAccess = uiState.hasUsageAccess,
                 error = uiState.error,
-                onGrantAccess = {
-                    usageViewModel.openUsageAccessSettings()
-                },
-                onRefresh = {
-                    usageViewModel.refresh()
-                }
+                onGrantAccess = onGrantAccess,
+                onRefresh = onRefreshUsage
             )
 
-            // Weekly chart
             WeeklyUsageCard(
                 days = historyState.days,
                 selectedDate = selectedDate,
-                onDaySelected = { selectedDate = it }
+                onDaySelected = onDateSelected
             )
 
-            LaunchedEffect(selectedDate, historyState.days) {
-                usageViewModel.loadMostUsed(selectedDate)
-            }
-
             // Most used applications
-            Column(
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(
                     text = "Most used",
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold
                 )
 
-                Text(
-                    text = if (selectedDate == LocalDate.now()) {
+                val locale = LocalLocale.current.platformLocale
+                val formattedDate = remember(selectedDate, locale) {
+                    if (selectedDate == LocalDate.now()) {
                         "Your top apps today"
                     } else {
                         "Your top apps on ${
                             selectedDate.format(
-                                DateTimeFormatter.ofPattern(
-                                    "EEE, MMM d",
-                                    LocalLocale.current.platformLocale
-                                )
+                                DateTimeFormatter.ofPattern("EEE, MMM d", locale)
                             )
                         }"
-                    },
+                    }
+                }
+
+                Text(
+                    text = formattedDate,
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+
                 when {
                     !uiState.hasUsageAccess -> {
                         Text(
@@ -201,16 +232,12 @@ fun OverviewScreen(
 
                     else -> {
                         AnimatedContent(
-                            targetState = dayAppsState.apps.map {
-                                it.packageName to it.totalUsageMillis
-                            },
-                            transitionSpec = {
-                                fadeIn(tween(220)) togetherWith fadeOut(tween(220))
-                            },
+                            targetState = dayAppsState.apps,
+                            transitionSpec = { fadeIn(tween(220)) togetherWith fadeOut(tween(220)) },
                             label = "mostUsedApps"
-                        ) {
+                        ) { apps ->
                             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                                dayAppsState.apps.forEach { app ->
+                                apps.forEach { app ->
                                     AppUsageRow(
                                         app = app,
                                         onClick = {
@@ -224,53 +251,54 @@ fun OverviewScreen(
                         }
                     }
                 }
-
             }
         }
-        }
     }
+}
 
 @Composable
 fun UsageSummary(
-    totalUsageMillis:Long,
+    totalUsageMillis: Long,
     isLoading: Boolean,
     hasUsageAccess: Boolean,
     error: String?,
-    onGrantAccess:() -> Unit,
-    onRefresh:() -> Unit
-){
+    onGrantAccess: () -> Unit,
+    onRefresh: () -> Unit,
+    modifier: Modifier = Modifier
+) {
     Row(
-        modifier = Modifier.fillMaxWidth()
+        modifier = modifier
+            .fillMaxWidth()
             .padding(16.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
-        Column(
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(
-                text  = "TODAY'S USAGE",
-                style  = MaterialTheme.typography.bodySmall,
+                text = "TODAY'S USAGE",
+                style = MaterialTheme.typography.bodySmall,
                 fontWeight = FontWeight.Bold
             )
-            when{
-                !hasUsageAccess ->{
+            when {
+                !hasUsageAccess -> {
                     Text(
                         text = "Access required",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
                     )
-                    Button(onClick = onGrantAccess){
+                    Button(onClick = onGrantAccess) {
                         Text("Grant access")
                     }
                 }
-                isLoading ->{
+
+                isLoading -> {
                     CircularProgressIndicator(
                         modifier = Modifier.size(28.dp),
                         color = MaterialTheme.colorScheme.primary
                     )
                 }
-                error != null ->{
+
+                error != null -> {
                     Text(
                         text = "Unable to load usage",
                         style = MaterialTheme.typography.titleMedium
@@ -279,30 +307,25 @@ fun UsageSummary(
                         Text("Retry")
                     }
                 }
-                else ->{
-                    val totalMinutes = totalUsageMillis/60_000L
-                    val hours = totalMinutes/60
-                    val minutes = totalMinutes % 60
 
+                else -> {
                     Text(
-                        text = "${hours}h ${minutes}m",
+                        text = formatOverviewDuration(totalUsageMillis),
                         style = MaterialTheme.typography.headlineLarge,
                         fontWeight = FontWeight.ExtraBold
                     )
                 }
             }
         }
-        if(hasUsageAccess && !isLoading && error == null){
+
+        if (hasUsageAccess && !isLoading && error == null) {
             CircularUsageIndicator(
                 size = 90.dp,
                 strokeWidth = 12.dp,
-                color = Color(0xFFB8F28B),
-                progress = (
-                        totalUsageMillis.toFloat() / (6* 60  * 60 * 1000f)
-                        ).coerceIn(0f,1f)
+                color = MaterialTheme.colorScheme.primary,
+                progress = (totalUsageMillis.toFloat() / TARGET_DAILY_USAGE_MILLIS).coerceIn(0f, 1f)
             )
         }
-
     }
 }
 
@@ -310,36 +333,38 @@ fun UsageSummary(
 fun WeeklyUsageCard(
     days: List<DailyDeviceUsage>,
     selectedDate: LocalDate,
-    onDaySelected: (LocalDate) -> Unit
+    onDaySelected: (LocalDate) -> Unit,
+    modifier: Modifier = Modifier
 ) {
+    val today = remember { LocalDate.now() }
 
-    val today = LocalDate.now()
-    val start = today.with (DayOfWeek.MONDAY)
-    val byDate = days.associateBy { it.date }
-    val week = (0..6).map { offset ->
-        val date = start.plusDays(offset.toLong())
-        byDate[date] ?: DailyDeviceUsage(
-            date = date,
-            totalUsageMillis = 0L,
-            recorded = false
-        )
+    val (week, selectedDay, maxMillis) = remember(days, selectedDate) {
+        val start = today.with(DayOfWeek.MONDAY)
+        val byDate = days.associateBy { it.date }
+        val weekList = (0..6).map { offset ->
+            val date = start.plusDays(offset.toLong())
+            byDate[date] ?: DailyDeviceUsage(
+                date = date,
+                totalUsageMillis = 0L,
+                recorded = false
+            )
+        }
+        val max = weekList.maxOf { it.totalUsageMillis }.coerceAtLeast(1L)
+        val selected = weekList.firstOrNull { it.date == selectedDate }
+            ?: weekList.last { !it.date.isAfter(today) }
+
+        Triple(weekList, selected, max)
     }
-    val maxMillis = week.maxOf { it.totalUsageMillis }.coerceAtLeast(1L)
-    val selectedDay = week.firstOrNull { it.date == selectedDate }
-        ?: week.last { !it.date.isAfter(today) }
 
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(24.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
-        )
+        colors = CardDefaults.cardColors(containerColor = chartSurfaceColor())
     ) {
         Column(
             modifier = Modifier.padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(18.dp)
         ) {
-
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -373,23 +398,27 @@ fun WeeklyUsageCard(
                         LocalLocale.current.platformLocale
                     )
                     val targetHeight = if (day.recorded && day.totalUsageMillis > 0L) {
-                        (day.totalUsageMillis.toFloat() / maxMillis * 76f).dp
-                            .coerceAtLeast(4.dp)
+                        (day.totalUsageMillis.toFloat() / maxMillis * MAX_BAR_HEIGHT_DP.value).dp.coerceAtLeast(4.dp)
                     } else {
                         4.dp
                     }
+
                     val barHeight by animateDpAsState(
                         targetValue = targetHeight,
                         animationSpec = tween(220),
                         label = "overviewBar"
                     )
 
+                    val isClickable = !day.date.isAfter(today)
+                    val contentDesc = "${day.date.dayOfWeek.name}, ${formatOverviewDuration(day.totalUsageMillis)}"
+
                     Column(
                         modifier = Modifier
                             .weight(1f)
                             .fillMaxHeight()
                             .clip(RoundedCornerShape(12.dp))
-                            .clickable(enabled = !day.date.isAfter(today)) {
+                            .semantics { contentDescription = contentDesc }
+                            .clickable(enabled = isClickable) {
                                 onDaySelected(day.date)
                             },
                         horizontalAlignment = Alignment.CenterHorizontally,
@@ -400,17 +429,12 @@ fun WeeklyUsageCard(
                                 modifier = Modifier
                                     .width(22.dp)
                                     .height(barHeight)
-                                    .clip(
-                                        RoundedCornerShape(
-                                            topStart = 8.dp,
-                                            topEnd = 8.dp
-                                        )
-                                    )
+                                    .clip(RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp))
                                     .background(
                                         if (selected) {
                                             MaterialTheme.colorScheme.primary
                                         } else {
-                                            Color(0xFF454E43)
+                                            MaterialTheme.colorScheme.surfaceVariant
                                         }
                                     )
                             )
@@ -428,11 +452,7 @@ fun WeeklyUsageCard(
                             } else {
                                 MaterialTheme.colorScheme.onSurfaceVariant
                             },
-                            fontWeight = if (selected) {
-                                FontWeight.Bold
-                            } else {
-                                FontWeight.Normal
-                            }
+                            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal
                         )
                     }
                 }
@@ -440,19 +460,15 @@ fun WeeklyUsageCard(
 
             Text(
                 text = selectedDay.date.format(
-                    DateTimeFormatter.ofPattern(
-                        "EEEE, MMM d",
-                        LocalLocale.current.platformLocale
-                    )
+                    DateTimeFormatter.ofPattern("EEEE, MMM d", LocalLocale.current.platformLocale)
                 ),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold
             )
+
             AnimatedContent(
                 targetState = selectedDay.date to selectedDay.totalUsageMillis,
-                transitionSpec = {
-                    fadeIn(tween(220)) togetherWith fadeOut(tween(220))
-                },
+                transitionSpec = { fadeIn(tween(220)) togetherWith fadeOut(tween(220)) },
                 label = "selectedDayUsage"
             ) { (date, millis) ->
                 val recorded = week.firstOrNull { it.date == date }?.recorded == true
@@ -482,11 +498,11 @@ private fun formatOverviewDuration(milliseconds: Long): String {
     }
 }
 
-@Preview(showBackground = true)
-@Composable
-private fun OverviewScreenPreview() {
-    KaizenTheme(darkTheme = true) {
-        OverviewScreen()
+private fun getGreetingMessage(): String {
+    return when (LocalTime.now().hour) {
+        in 5..11 -> "Good Morning"
+        in 12..16 -> "Good Afternoon"
+        else -> "Good Evening"
     }
 }
 

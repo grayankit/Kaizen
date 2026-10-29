@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -39,12 +40,12 @@ fun AppSearchBar(
             .fillMaxWidth()
             .height(46.dp)
             .background(
-                Color(0xFF171923),
+                MaterialTheme.colorScheme.surfaceContainerHigh,
                 RoundedCornerShape(14.dp)
             )
             .border(
                 1.dp,
-                Color(0xFF353844),
+                MaterialTheme.colorScheme.outline,
                 RoundedCornerShape(14.dp)
             )
 
@@ -54,7 +55,7 @@ fun AppSearchBar(
         Icon(
             imageVector = Icons.Outlined.Search,
             contentDescription = null,
-            tint = Color(0xFFA5A7B8)
+            tint = MaterialTheme.colorScheme.onSurfaceVariant
         )
         Spacer(modifier = Modifier.width(10.dp))
 
@@ -64,7 +65,7 @@ fun AppSearchBar(
             modifier = Modifier.weight(1f),
             singleLine = true,
             textStyle = TextStyle(
-                color = Color(0xFFE6E6F0),
+                color = MaterialTheme.colorScheme.onSurface,
                 fontSize = 13.sp
             ),
             keyboardOptions = KeyboardOptions(
@@ -76,7 +77,7 @@ fun AppSearchBar(
                     if(query.isEmpty()){
                         Text(
                             text = "Search for App",
-                            color = Color(0xFFA5A7B8),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                             fontSize = 13.sp
                         )
                     }

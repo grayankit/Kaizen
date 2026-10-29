@@ -27,6 +27,7 @@ import me.ankitgrai.kaizen.ui.screens.AppDetailsScreen
 import me.ankitgrai.kaizen.ui.screens.AppsScreen
 import me.ankitgrai.kaizen.ui.screens.HistoryScreen
 import me.ankitgrai.kaizen.ui.screens.OverviewScreen
+import me.ankitgrai.kaizen.ui.screens.SettingsScreen
 import me.ankitgrai.kaizen.ui.theme.KaizenTheme
 import me.ankitgrai.kaizen.viewmodel.UsageViewModel
 
@@ -35,6 +36,7 @@ private object Routes{
     const val APPS = "apps"
     const val HISTORY = "history"
     const val APP_DETAILS = "app_details/{packageName}"
+    const val SETTINGS = "settings"
 }
 
 @Composable
@@ -51,8 +53,9 @@ fun AppNavigation(){
         else -> CurrentScreen.Overview
     }
     Scaffold(
+        containerColor = androidx.compose.material3.MaterialTheme.colorScheme.background,
         bottomBar = {
-            if(currentRoute != Routes.APP_DETAILS) {
+            if(currentRoute != Routes.APP_DETAILS && currentRoute != Routes.SETTINGS) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -101,7 +104,15 @@ fun AppNavigation(){
                         navController.navigate(
                             "app_details/${Uri.encode(packageName)}"
                         )
+                    },
+                    onOpenSettings = {
+                        navController.navigate(Routes.SETTINGS)
                     }
+                )
+            }
+            composable(Routes.SETTINGS) {
+                SettingsScreen(
+                    onBack = { navController.popBackStack() }
                 )
             }
             composable(Routes.APPS) {
