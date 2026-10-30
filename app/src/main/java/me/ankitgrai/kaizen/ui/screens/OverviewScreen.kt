@@ -55,6 +55,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.launch
 import me.ankitgrai.kaizen.data.usage.DailyDeviceUsage
+import me.ankitgrai.kaizen.settings.LocalScreenTimeSettings
+import me.ankitgrai.kaizen.settings.ScreenTimeSettings
+import me.ankitgrai.kaizen.settings.formatScreenTimeTarget
 import me.ankitgrai.kaizen.ui.components.AppUsageRow
 import me.ankitgrai.kaizen.ui.components.CircularUsageIndicator
 import me.ankitgrai.kaizen.ui.components.KaizenPullToRefresh
@@ -69,7 +72,6 @@ import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
 
-private const val TARGET_DAILY_USAGE_MILLIS = 6 * 60 * 60 * 1000f // 6 Hours
 private val MAX_BAR_HEIGHT_DP = 76.dp
 
 @Composable
@@ -85,6 +87,8 @@ fun OverviewScreen(
 
     val scope = rememberCoroutineScope()
     var selectedDate by remember { mutableStateOf(LocalDate.now()) }
+    val targetUsageMillis = LocalScreenTimeSettings.current?.targetMillis
+        ?: ScreenTimeSettings.DEFAULT_TARGET_MINUTES * 60_000L
 
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
         usageViewModel.refresh()
@@ -106,7 +110,8 @@ fun OverviewScreen(
         onGrantAccess = { usageViewModel.openUsageAccessSettings() },
         onRefreshUsage = { usageViewModel.refresh() },
         onAppClick = onAppClick,
-        onOpenSettings = onOpenSettings
+        onOpenSettings = onOpenSettings,
+        targetUsageMillis = targetUsageMillis
     )
 }
 
@@ -123,6 +128,7 @@ fun OverviewContent(
     onRefreshUsage: () -> Unit,
     onAppClick: (String) -> Unit,
     onOpenSettings: () -> Unit,
+    targetUsageMillis: Long = ScreenTimeSettings.DEFAULT_TARGET_MINUTES * 60_000L,
     modifier: Modifier = Modifier
 ) {
     KaizenPullToRefresh(
@@ -171,7 +177,8 @@ fun OverviewContent(
                 hasUsageAccess = uiState.hasUsageAccess,
                 error = uiState.error,
                 onGrantAccess = onGrantAccess,
-                onRefresh = onRefreshUsage
+                onRefresh = onRefreshUsage,
+                targetUsageMillis = targetUsageMillis
             )
 
             WeeklyUsageCard(
@@ -264,6 +271,7 @@ fun UsageSummary(
     error: String?,
     onGrantAccess: () -> Unit,
     onRefresh: () -> Unit,
+    targetUsageMillis: Long = ScreenTimeSettings.DEFAULT_TARGET_MINUTES * 60_000L,
     modifier: Modifier = Modifier
 ) {
     Row(
@@ -314,6 +322,11 @@ fun UsageSummary(
                         style = MaterialTheme.typography.headlineLarge,
                         fontWeight = FontWeight.ExtraBold
                     )
+                    Text(
+                        text = "of ${formatScreenTimeTarget((targetUsageMillis / 60_000L).toInt())}",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
             }
         }
@@ -323,7 +336,7 @@ fun UsageSummary(
                 size = 90.dp,
                 strokeWidth = 12.dp,
                 color = MaterialTheme.colorScheme.primary,
-                progress = (totalUsageMillis.toFloat() / TARGET_DAILY_USAGE_MILLIS).coerceIn(0f, 1f)
+                progress = (totalUsageMillis.toFloat() / targetUsageMillis.coerceAtLeast(1L)).coerceIn(0f, 1f)
             )
         }
     }
