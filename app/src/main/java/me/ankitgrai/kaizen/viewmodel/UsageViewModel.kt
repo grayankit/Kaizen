@@ -22,6 +22,7 @@ data class UsageUiState(
     val apps: List<AppUsage> = emptyList(),
     val installedApps: List<AppUsage> = emptyList(),
     val totalUsageMills: Long = 0L,
+    val yesterdayUsageMillis: Long? = null,
     val error: String? = null
 )
 data class AppDetailsUiState(
@@ -106,10 +107,15 @@ class UsageViewModel(
             try {
                 val usage = repository.refreshUsage(force)
                 val installed = repository.getInstalledApps()
-                val screenTime = repository.getDailyDeviceUsage(days = 1)
-                    .lastOrNull()
+                val usageDays = repository.getDailyDeviceUsage(days = 2)
+                val today = LocalDate.now()
+                val screenTime = usageDays
+                    .firstOrNull { it.date == today }
                     ?.totalUsageMillis
                     ?: 0L
+                val yesterdayUsage = usageDays
+                    .firstOrNull { it.date == today.minusDays(1) }
+                    ?.totalUsageMillis
 
                 val usageByPackage = usage.associateBy {
                     it.packageName
@@ -141,7 +147,8 @@ class UsageViewModel(
                     hasUsageAccess = true,
                     apps = usedApps,
                     installedApps = allApps,
-                    totalUsageMills = screenTime
+                    totalUsageMills = screenTime,
+                    yesterdayUsageMillis = yesterdayUsage
                 )
             } catch (exception: Exception){
                 _uiState.value = _uiState.value.copy(

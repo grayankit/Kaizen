@@ -132,6 +132,7 @@ fun AppsScreen(
         item {
             UsageSummaryCard(
                 totalUsageMillis = uiState.totalUsageMills,
+                yesterdayUsageMillis = uiState.yesterdayUsageMillis,
                 appsUsed = uiState.installedApps.count {
                     it.duration != "0m"
                 }
@@ -255,6 +256,7 @@ fun AppsScreen(
 @Composable
 private fun UsageSummaryCard(
     totalUsageMillis: Long,
+    yesterdayUsageMillis: Long?,
     appsUsed: Int
 ) {
     val totalMinutes = totalUsageMillis / 60_000L
@@ -262,6 +264,9 @@ private fun UsageSummaryCard(
     val minutes = totalMinutes % 60
 
     val formattedUsage = "${hours}h ${minutes}m"
+    val comparison = remember(totalUsageMillis, yesterdayUsageMillis) {
+        usageComparison(totalUsageMillis, yesterdayUsageMillis)
+    }
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -298,8 +303,12 @@ private fun UsageSummaryCard(
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Text(
-                text = "↓ 18%",
-                color = MaterialTheme.colorScheme.primary,
+                text = comparison.label,
+                color = when (comparison.direction) {
+                    UsageChangeDirection.Up -> MaterialTheme.colorScheme.error
+                    UsageChangeDirection.Down -> MaterialTheme.colorScheme.primary
+                    UsageChangeDirection.None -> MaterialTheme.colorScheme.onSurfaceVariant
+                },
                 fontSize = 15.sp,
                 fontWeight = FontWeight.SemiBold
             )
@@ -310,6 +319,43 @@ private fun UsageSummaryCard(
                 fontSize = 10.sp
             )
         }
+    }
+}
+
+private enum class UsageChangeDirection {
+    Up,
+    Down,
+    None
+}
+
+private data class UsageComparison(
+    val label: String,
+    val direction: UsageChangeDirection
+)
+
+private fun usageComparison(
+    todayUsageMillis: Long,
+    yesterdayUsageMillis: Long?
+): UsageComparison {
+    if (yesterdayUsageMillis == null || yesterdayUsageMillis == 0L) {
+        return UsageComparison("—", UsageChangeDirection.None)
+    }
+
+    val percentage = (
+        (todayUsageMillis - yesterdayUsageMillis).toDouble() /
+            yesterdayUsageMillis * 100
+        ).toInt()
+
+    return when {
+        percentage > 0 -> UsageComparison(
+            label = "↑ $percentage%",
+            direction = UsageChangeDirection.Up
+        )
+        percentage < 0 -> UsageComparison(
+            label = "↓ ${-percentage}%",
+            direction = UsageChangeDirection.Down
+        )
+        else -> UsageComparison("No change", UsageChangeDirection.None)
     }
 }
 @Preview(showBackground = true)
