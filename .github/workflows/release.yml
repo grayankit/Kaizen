@@ -1,0 +1,116 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Build, sign, and publish
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check tag
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ ! "$GITHUB_REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Tag must be vMAJOR.MINOR.PATCH, for example v1.0.0. Got: $GITHUB_REF_NAME"
+            exit 1
+          fi
+
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up JDK
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: Decode release keystore
+        shell: bash
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          missing=()
+          [ -n "$KEYSTORE_BASE64" ] || missing+=("KEYSTORE_BASE64")
+          [ -n "$KEYSTORE_PASSWORD" ] || missing+=("KEYSTORE_PASSWORD")
+          [ -n "$KEY_ALIAS" ] || missing+=("KEY_ALIAS")
+          [ -n "$KEY_PASSWORD" ] || missing+=("KEY_PASSWORD")
+          if [ "${#missing[@]}" -ne 0 ]; then
+            echo "Missing signing secrets: ${missing[*]}"
+            echo "Add them under Settings, Secrets and variables, Actions before tagging a release."
+            exit 1
+          fi
+          echo "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/kaizen-release.jks"
+
+      - name: Build signed release
+        env:
+          KEYSTORE_FILE: ${{ runner.temp }}/kaizen-release.jks
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: ./gradlew :app:assembleRelease :app:bundleRelease --no-daemon
+
+      - name: Verify signature and collect artifacts
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          version="${RELEASE_TAG#v}"
+          apk="app/build/outputs/apk/release/app-release.apk"
+          aab="app/build/outputs/bundle/release/app-release.aab"
+          mapping="app/build/outputs/mapping/release/mapping.txt"
+          test -f "$apk"
+          test -f "$aab"
+          test -f "$mapping"
+
+          sdk="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
+          if [ -z "$sdk" ]; then
+            echo "Android SDK not found."
+            exit 1
+          fi
+          build_tools="$(find "$sdk/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)"
+          "$build_tools/apksigner" verify --print-certs "$apk"
+
+          mkdir -p dist
+          cp "$apk" "dist/kaizen-${version}.apk"
+          cp "$aab" "dist/kaizen-${version}.aab"
+          cp "$mapping" "dist/mapping.txt"
+          (
+            cd dist
+            sha256sum "kaizen-${version}.apk" "kaizen-${version}.aab" mapping.txt > SHA256SUMS
+          )
+
+      - name: Publish GitHub Release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          version="${RELEASE_TAG#v}"
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" dist/* --clobber
+          else
+            gh release create "$RELEASE_TAG" dist/* \
+              --title "Kaizen ${version}" \
+              --generate-notes
+          fi

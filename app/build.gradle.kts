@@ -4,6 +4,9 @@ plugins {
     alias(libs.plugins.ksp)
 }
 
+val keystorePath = System.getenv("KEYSTORE_FILE")
+val releaseVersion = releaseVersion()
+
 android {
     namespace = "me.ankitgrai.kaizen"
     compileSdk {
@@ -14,14 +17,28 @@ android {
         applicationId = "me.ankitgrai.kaizen"
         minSdk = 29
         targetSdk = 37
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = releaseVersion.code
+        versionName = releaseVersion.name
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    if (!keystorePath.isNullOrBlank()) {
+        signingConfigs {
+            create("release") {
+                storeFile = file(keystorePath)
+                storePassword = requiredEnv("KEYSTORE_PASSWORD")
+                keyAlias = requiredEnv("KEY_ALIAS")
+                keyPassword = requiredEnv("KEY_PASSWORD")
+            }
+        }
+    }
+
     buildTypes {
         release {
+            if (!keystorePath.isNullOrBlank()) {
+                signingConfig = signingConfigs.getByName("release")
+            }
             optimization {
                 enable = true
                 packageScope = setOf("androidx.**", "kotlin.**", "kotlinx.**")
@@ -65,4 +82,28 @@ dependencies {
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)
     ksp(libs.androidx.room.compiler)
+}
+
+data class ReleaseVersion(val name: String, val code: Int)
+
+fun releaseVersion(): ReleaseVersion {
+    val tag = System.getenv("RELEASE_TAG")?.takeIf { it.isNotBlank() }
+        ?: return ReleaseVersion(name = "1.0", code = 1)
+    val match = Regex("""^v(\d+)\.(\d+)\.(\d+)$""").matchEntire(tag)
+        ?: error("RELEASE_TAG must be vMAJOR.MINOR.PATCH, was '$tag'")
+    val major = match.groupValues[1].toInt()
+    val minor = match.groupValues[2].toInt()
+    val patch = match.groupValues[3].toInt()
+    require(minor < 100 && patch < 100) {
+        "Minor and patch must be below 100 so versionCode stays unique. Tag was '$tag'."
+    }
+    return ReleaseVersion(
+        name = "$major.$minor.$patch",
+        code = major * 10_000 + minor * 100 + patch
+    )
+}
+
+fun requiredEnv(name: String): String {
+    return System.getenv(name)?.takeIf { it.isNotBlank() }
+        ?: error("$name is required to sign a release")
 }
