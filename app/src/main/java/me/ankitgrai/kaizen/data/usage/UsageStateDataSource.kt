@@ -10,6 +10,7 @@ import android.provider.Settings
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
+import java.time.temporal.ChronoUnit
 
 internal val NON_SCREEN_TIME = setOf(
     "com.samsung.android.emergency",
@@ -161,6 +162,7 @@ class UsageStateDataSource (
         var resumedPackage: String? = null
         var countingSince: Long? = null
         val deviceSlices = mutableMapOf<LocalDate, Long>()
+        val hourSlices = mutableMapOf<Pair<LocalDate, Int>, Long>()
         val appSlices = mutableMapOf<Pair<LocalDate, String>, Long>()
 
         fun addElapsed(until: Long) {
@@ -190,6 +192,7 @@ class UsageStateDataSource (
                         deviceSlices[date] = (deviceSlices[date] ?: 0L) + slice
                         val key = date to pkg
                         appSlices[key] = (appSlices[key] ?: 0L) + slice
+                        addHourSlices(hourSlices, zone, date, cursor, sliceEnd)
                     }
                     cursor = sliceEnd
                 }
@@ -258,10 +261,50 @@ class UsageStateDataSource (
                     totalUsageMillis = millis
                 )
             }
+        val hourTotals = buildList {
+            var hourDate = earliest
+            while (!hourDate.isAfter(today)) {
+                for (hour in 0..23) {
+                    add(
+                        HourlyDeviceUsage(
+                            date = hourDate,
+                            hour = hour,
+                            totalUsageMillis = hourSlices[hourDate to hour] ?: 0L
+                        )
+                    )
+                }
+                hourDate = hourDate.plusDays(1)
+            }
+        }
         return ObservedUsage(
             earliestObserved = earliest,
             deviceTotals = deviceTotals,
-            appTotals = appTotals
+            appTotals = appTotals,
+            hourTotals = hourTotals
         )
+    }
+}
+
+private fun addHourSlices(
+    hourSlices: MutableMap<Pair<LocalDate, Int>, Long>,
+    zone: ZoneId,
+    date: LocalDate,
+    from: Long,
+    to: Long
+) {
+    var cursor = from
+    while (cursor < to) {
+        val zoned = Instant.ofEpochMilli(cursor).atZone(zone)
+        val nextHour = zoned.truncatedTo(ChronoUnit.HOURS)
+            .plusHours(1)
+            .toInstant()
+            .toEpochMilli()
+        val hourEnd = minOf(to, nextHour)
+        val amount = hourEnd - cursor
+        if (amount > 0) {
+            val key = date to zoned.hour
+            hourSlices[key] = (hourSlices[key] ?: 0L) + amount
+        }
+        cursor = hourEnd
     }
 }

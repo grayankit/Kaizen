@@ -1,16 +1,16 @@
 package me.ankitgrai.kaizen.ui.components
 
-import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -28,7 +28,9 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.text.font.FontWeight
@@ -47,20 +49,33 @@ fun FloatingNavigationBar(
     onScreenSelected: (CurrentScreen) -> Unit,
     modifier: Modifier = Modifier
 ){
-    val borderColor = MaterialTheme.colorScheme.outline
     val activeColor = MaterialTheme.colorScheme.primaryContainer
     val iconColor = MaterialTheme.colorScheme.primary
+    val barColor = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.94f)
+    val indicatorOffset by animateDpAsState(
+        targetValue = (IconItemWidth + ItemGap) * selectedDestination.ordinal,
+        animationSpec = tween(280, easing = FastOutSlowInEasing),
+        label = "navIndicator"
+    )
 
-    Row (
+    Box(
         modifier = modifier
-            .border(
-                width = 2.dp,
-                color = borderColor,
-                shape = CircleShape
-            )
-            .padding(6.dp),
+            .shadow(16.dp, CircleShape, clip = false)
+            .clip(CircleShape)
+            .background(barColor)
+            .padding(6.dp)
+    ) {
+    Box(
+        modifier = Modifier
+            .offset(x = indicatorOffset)
+            .width(SelectedItemWidth)
+            .height(ItemHeight)
+            .clip(CircleShape)
+            .background(activeColor)
+    )
+    Row (
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(4.dp)
+        horizontalArrangement = Arrangement.spacedBy(ItemGap)
     ){
         NavigationItem(
             label = "Overview",
@@ -71,9 +86,7 @@ fun FloatingNavigationBar(
                 )
             },
             selected = selectedDestination == CurrentScreen.Overview,
-            activeColor = activeColor,
-            iconColor  = iconColor,
-            modifier  = Modifier.weight(1f)
+            iconColor = iconColor
         ) {
             onScreenSelected(CurrentScreen.Overview)
         }
@@ -86,9 +99,7 @@ fun FloatingNavigationBar(
                 )
             },
             selected = selectedDestination == CurrentScreen.Apps,
-            activeColor = activeColor,
-            iconColor = iconColor,
-            modifier = Modifier.weight(1f)
+            iconColor = iconColor
         ) {
             onScreenSelected(CurrentScreen.Apps)
         }
@@ -101,12 +112,11 @@ fun FloatingNavigationBar(
                 )
             },
             selected = selectedDestination == CurrentScreen.History,
-            activeColor = activeColor,
-            iconColor = iconColor,
-            modifier  = Modifier.weight(1f)
+            iconColor = iconColor
         ) {
             onScreenSelected(CurrentScreen.History)
         }
+    }
     }
 }
 
@@ -114,47 +124,47 @@ fun FloatingNavigationBar(
 private fun NavigationItem(
     icon: @Composable () -> Unit,
     selected: Boolean,
-    activeColor: Color,
     iconColor: Color,
     modifier: Modifier  = Modifier,
     label: String? = null,
     onClick: () -> Unit
 ){
-    val backgroundColor by animateColorAsState(
-        targetValue = if(selected) activeColor else Color.Transparent,
-        animationSpec = tween(250),
-        label = "Navigation background"
+    val width by animateDpAsState(
+        targetValue = if (selected && label != null) SelectedItemWidth else IconItemWidth,
+        animationSpec = tween(280, easing = FastOutSlowInEasing),
+        label = "Navigation item width"
     )
-    val height by animateDpAsState(
-        targetValue = 60.dp,
-        tween(250),
-        "Navigation item height"
+    val labelAlpha by animateFloatAsState(
+        targetValue = if (selected && label != null) 1f else 0f,
+        animationSpec = tween(180),
+        label = "Navigation label"
     )
     Row(
         modifier = modifier
-            .height(height)
+            .width(width)
+            .height(ItemHeight)
             .clip(CircleShape)
-            .background(backgroundColor)
             .clickable(onClick = onClick)
-            .padding(horizontal = if(selected && label != null) 18.dp else 8.dp),
-        horizontalArrangement = Arrangement.Center,
+            .padding(start = 13.dp, end = 13.dp),
+        horizontalArrangement = Arrangement.Start,
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(
-            modifier = modifier.size(30.dp),
+            modifier = Modifier.size(30.dp),
             contentAlignment = Alignment.Center
-        ){
+        ) {
             CompositionLocalProvider(
                 LocalContentColor provides iconColor
             ) {
                 icon()
             }
         }
-        if(selected && label != null){
-            Spacer(modifier = Modifier.width(10.dp))
-
+        if (label != null) {
             Text(
                 text = label,
+                modifier = Modifier
+                    .padding(start = 8.dp)
+                    .graphicsLayer { alpha = labelAlpha },
                 color = iconColor,
                 fontSize = 16.sp,
                 fontWeight = FontWeight.SemiBold,
@@ -163,6 +173,11 @@ private fun NavigationItem(
         }
     }
 }
+
+private val ItemHeight = 56.dp
+private val IconItemWidth = 56.dp
+private val SelectedItemWidth = 156.dp
+private val ItemGap = 4.dp
 
 @Preview(showBackground = true)
 @Composable

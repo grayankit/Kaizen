@@ -23,6 +23,18 @@ interface UsageHistoryDao {
 
     @Query(
         """
+        SELECT * FROM hourly_device_usage
+        WHERE date = :date
+        ORDER BY hour
+        """
+    )
+    suspend fun hoursOnDate(date: String): List<HourlyDeviceUsageEntity>
+
+    @Upsert
+    suspend fun upsertDeviceHours(hours: List<HourlyDeviceUsageEntity>)
+
+    @Query(
+        """
         SELECT * FROM daily_app_usage
         WHERE date = :date
         ORDER BY totalUsageMillis DESC

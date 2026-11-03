@@ -10,12 +10,13 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material3.AlertDialog
@@ -46,6 +47,7 @@ import me.ankitgrai.kaizen.settings.LocalScreenTimeSettings
 import me.ankitgrai.kaizen.settings.ScreenTimeSettings
 import me.ankitgrai.kaizen.settings.formatScreenTimeTarget
 import me.ankitgrai.kaizen.settings.snapTargetMinutes
+import me.ankitgrai.kaizen.ui.components.KaizenScrollItem
 import me.ankitgrai.kaizen.ui.theme.AppThemeId
 import me.ankitgrai.kaizen.ui.theme.LocalThemeSettings
 import me.ankitgrai.kaizen.ui.theme.colorScheme
@@ -79,130 +81,69 @@ fun SettingsScreen(
                 navigationIconContentColor = scheme.onBackground
             )
         )
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 20.dp, vertical = 8.dp),
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(horizontal = 20.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(18.dp)
         ) {
             if (screenTime != null) {
-                Text(
-                    text = "Screen time",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold
-                )
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(scheme.surfaceVariant)
-                        .clickable { showTargetDialog = true }
-                        .padding(14.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Column(
-                        modifier = Modifier.weight(1f),
-                        verticalArrangement = Arrangement.spacedBy(2.dp)
-                    ) {
-                        Text(
-                            text = "Maximum screen time",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                        Text(
-                            text = "Daily target for the overview ring",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = scheme.onSurfaceVariant
-                        )
-                    }
+                item(key = "screen-time-heading") {
                     Text(
-                        text = formatScreenTimeTarget(screenTime.targetMinutes),
-                        modifier = Modifier.padding(start = 12.dp),
-                        color = scheme.primary,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                }
-            }
-
-            Text(
-                text = "Appearance",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold
-            )
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                ThemeMode.entries.forEach { mode ->
-                    val selected = settings.mode == mode
-                    Text(
-                        text = mode.label,
-                        color = if (selected) scheme.onPrimary else scheme.onSurfaceVariant,
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(50))
-                            .background(if (selected) scheme.primary else scheme.surfaceVariant)
-                            .clickable { settings.selectMode(mode) }
-                            .padding(horizontal = 14.dp, vertical = 8.dp)
-                    )
-                }
-            }
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "OLED black",
+                        text = "Screen time",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold
                     )
-                    Text(
-                        text = "Pure black background in dark mode",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = scheme.onSurfaceVariant
-                    )
                 }
-                Switch(
-                    checked = settings.oled,
-                    onCheckedChange = settings::selectOled
-                )
+                item(key = "screen-time") {
+                    KaizenScrollItem(index = 0) {
+                        ScreenTimeTargetRow(
+                            minutes = screenTime.targetMinutes,
+                            onClick = { showTargetDialog = true }
+                        )
+                    }
+                }
             }
 
-            Text(
-                text = "Theme",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold
-            )
-            Text(
-                text = "Material You follows your wallpaper. The other palettes are the Dartotsu presets.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = scheme.onSurfaceVariant
-            )
-            AppThemeId.entries.forEach { theme ->
-                val selected = settings.themeId == theme
-                val preview = theme.previewColor()
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(if (selected) scheme.primaryContainer else scheme.surfaceVariant)
-                        .clickable { settings.selectTheme(theme) }
-                        .padding(14.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(14.dp)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(28.dp)
-                            .clip(CircleShape)
-                            .background(preview)
-                            .border(1.dp, scheme.outline, CircleShape)
-                    )
-                    Text(
-                        text = theme.label,
-                        color = if (selected) scheme.onPrimaryContainer else scheme.onSurface,
-                        fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal
+            item(key = "appearance-heading") {
+                Text(
+                    text = "Appearance",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+            item(key = "theme-mode") {
+                KaizenScrollItem(index = 1) {
+                    ThemeModeRow(selected = settings.mode, onSelect = settings::selectMode)
+                }
+            }
+            item(key = "oled") {
+                KaizenScrollItem(index = 2) {
+                    OledRow(checked = settings.oled, onCheckedChange = settings::selectOled)
+                }
+            }
+            item(key = "theme-heading") {
+                Text(
+                    text = "Theme",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+            item(key = "theme-description") {
+                Text(
+                    text = "Material You follows your wallpaper. The other palettes are the Dartotsu presets.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = scheme.onSurfaceVariant
+                )
+            }
+            itemsIndexed(
+                items = AppThemeId.entries,
+                key = { _, theme -> theme.name }
+            ) { index, theme ->
+                KaizenScrollItem(index = index + 3) {
+                    ThemeOptionRow(
+                        theme = theme,
+                        selected = settings.themeId == theme,
+                        onClick = { settings.selectTheme(theme) }
                     )
                 }
             }
@@ -217,6 +158,131 @@ fun SettingsScreen(
                 screenTime.selectTargetMinutes(minutes)
                 showTargetDialog = false
             }
+        )
+    }
+}
+
+@Composable
+private fun ScreenTimeTargetRow(
+    minutes: Int,
+    onClick: () -> Unit
+) {
+    val scheme = MaterialTheme.colorScheme
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(scheme.surfaceVariant)
+            .clickable(onClick = onClick)
+            .padding(14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(2.dp)
+        ) {
+            Text(
+                text = "Maximum screen time",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold
+            )
+            Text(
+                text = "Daily target for the overview ring",
+                style = MaterialTheme.typography.bodyMedium,
+                color = scheme.onSurfaceVariant
+            )
+        }
+        Text(
+            text = formatScreenTimeTarget(minutes),
+            modifier = Modifier.padding(start = 12.dp),
+            color = scheme.primary,
+            fontWeight = FontWeight.SemiBold
+        )
+    }
+}
+
+@Composable
+private fun ThemeModeRow(
+    selected: ThemeMode,
+    onSelect: (ThemeMode) -> Unit
+) {
+    val scheme = MaterialTheme.colorScheme
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        ThemeMode.entries.forEach { mode ->
+            val isSelected = selected == mode
+            Text(
+                text = mode.label,
+                color = if (isSelected) scheme.onPrimary else scheme.onSurfaceVariant,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(50))
+                    .background(if (isSelected) scheme.primary else scheme.surfaceVariant)
+                    .clickable { onSelect(mode) }
+                    .padding(horizontal = 14.dp, vertical = 8.dp)
+            )
+        }
+    }
+}
+
+@Composable
+private fun OledRow(
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    val scheme = MaterialTheme.colorScheme
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = "OLED black",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold
+            )
+            Text(
+                text = "Pure black background in dark mode",
+                style = MaterialTheme.typography.bodyMedium,
+                color = scheme.onSurfaceVariant
+            )
+        }
+        Switch(
+            checked = checked,
+            onCheckedChange = onCheckedChange
+        )
+    }
+}
+
+@Composable
+private fun ThemeOptionRow(
+    theme: AppThemeId,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    val scheme = MaterialTheme.colorScheme
+    val preview = theme.previewColor()
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(if (selected) scheme.primaryContainer else scheme.surfaceVariant)
+            .clickable(onClick = onClick)
+            .padding(14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .size(28.dp)
+                .clip(CircleShape)
+                .background(preview)
+                .border(1.dp, scheme.outline, CircleShape)
+        )
+        Text(
+            text = theme.label,
+            color = if (selected) scheme.onPrimaryContainer else scheme.onSurface,
+            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal
         )
     }
 }

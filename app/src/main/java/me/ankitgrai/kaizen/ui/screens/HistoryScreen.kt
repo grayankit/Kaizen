@@ -30,6 +30,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -44,17 +45,20 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import me.ankitgrai.kaizen.data.usage.DailyDeviceUsage
+import me.ankitgrai.kaizen.data.usage.HourlyDeviceUsage
 import me.ankitgrai.kaizen.ui.components.PeriodSelector
 import me.ankitgrai.kaizen.ui.components.UsagePeriod
 import me.ankitgrai.kaizen.ui.theme.KaizenTheme
 import me.ankitgrai.kaizen.viewmodel.UsageViewModel
 import java.time.DayOfWeek
 import java.time.LocalDate
+import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import androidx.compose.ui.platform.LocalLocale
 import androidx.compose.ui.tooling.preview.Preview
 import me.ankitgrai.kaizen.ui.components.KaizenPullToRefresh
 import me.ankitgrai.kaizen.ui.theme.chartSurfaceColor
+import me.ankitgrai.kaizen.viewmodel.DayHoursUiState
 import me.ankitgrai.kaizen.viewmodel.HistoryUiState
 
 
@@ -64,6 +68,7 @@ fun HistoryScreen(
     usageViewModel: UsageViewModel = viewModel()
 ) {
     val historyState by usageViewModel.historyState.collectAsState()
+    val dayHoursState by usageViewModel.dayHoursState.collectAsState()
     val isRefreshing by usageViewModel.isRefreshing.collectAsState()
     val scope = rememberCoroutineScope()
 
@@ -73,16 +78,20 @@ fun HistoryScreen(
 
     HistoryContent(
         historyState = historyState,
+        dayHoursState = dayHoursState,
         isRefreshing = isRefreshing,
-        onRefresh = { scope.launch { usageViewModel.refreshAll() } }
+        onRefresh = { scope.launch { usageViewModel.refreshAll() } },
+        onLoadDayHours = usageViewModel::loadDayHours
     )
 }
 
 @Composable
 fun HistoryContent(
     historyState: HistoryUiState,
+    dayHoursState: DayHoursUiState = DayHoursUiState(),
     isRefreshing: Boolean = false,
-    onRefresh: () -> Unit = {}
+    onRefresh: () -> Unit = {},
+    onLoadDayHours: (LocalDate) -> Unit = {}
 ) {
     val today = LocalDate.now()
 
@@ -97,6 +106,28 @@ fun HistoryContent(
     var selectedDate by remember {
         mutableStateOf(today)
     }
+
+    var selectedHour by remember(periodDate) {
+        mutableIntStateOf(if (periodDate == today) LocalTime.now().hour else -1)
+    }
+
+    LaunchedEffect(selectedPeriod, periodDate, historyState.days) {
+        if (selectedPeriod == UsagePeriod.DAY) {
+            onLoadDayHours(periodDate)
+        }
+    }
+
+    LaunchedEffect(periodDate, dayHoursState.date, dayHoursState.hours) {
+        if (selectedPeriod != UsagePeriod.DAY) return@LaunchedEffect
+        if (dayHoursState.date != periodDate || dayHoursState.hours.isEmpty()) return@LaunchedEffect
+        if (selectedHour < 0) {
+            selectedHour = dayHoursState.hours.maxBy { it.totalUsageMillis }.hour
+        }
+    }
+
+    val hoursReady = dayHoursState.date == periodDate && !dayHoursState.isLoading
+    val hoursAvailable = hoursReady && dayHoursState.available
+    val selectedHourUsage = dayHoursState.hours.firstOrNull { it.hour == selectedHour }
 
     val historyByDate = historyState.days.associateBy {
         it.date
@@ -187,7 +218,7 @@ fun HistoryContent(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = 20.dp, vertical = 24.dp),
+            .padding(start = 20.dp, end = 20.dp, top = 24.dp, bottom = 120.dp),
         verticalArrangement = Arrangement.spacedBy(20.dp)
     ) {
         // Screen heading
@@ -341,7 +372,7 @@ fun HistoryContent(
         ) {
             Text(
                 text = when (selectedPeriod) {
-                    UsagePeriod.DAY -> "Selected day"
+                    UsagePeriod.DAY -> "Usage by hour"
                     UsagePeriod.WEEK -> "Daily screen time"
                     UsagePeriod.MONTH -> "Usage by day"
                 },
@@ -368,6 +399,42 @@ fun HistoryContent(
                                 historyState.error.orEmpty(),
                         color = MaterialTheme.colorScheme.error
                     )
+                }
+
+                selectedPeriod == UsagePeriod.DAY && !hoursReady -> {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(150.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator()
+                    }
+                }
+
+                selectedPeriod == UsagePeriod.DAY && !hoursAvailable -> {
+                    Text(
+                        text = "Hourly usage isn't available for this day.",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                selectedPeriod == UsagePeriod.DAY -> {
+                    HourlyUsageChart(
+                        date = periodDate,
+                        hours = dayHoursState.hours,
+                        selectedHour = selectedHour,
+                        today = today,
+                        onHourSelected = { selectedHour = it }
+                    )
+                    if (selectedHour in 0..23) {
+                        HourDetailCard(
+                            hour = selectedHour,
+                            usageMillis = selectedHourUsage?.totalUsageMillis,
+                            recorded = selectedHourUsage != null &&
+                                !isFutureHour(periodDate, selectedHour, today)
+                        )
+                    }
                 }
 
                 else -> {
@@ -430,6 +497,144 @@ fun HistoryContent(
         Spacer(modifier = Modifier.height(12.dp))
     }
     }
+}
+
+@Composable
+private fun HourlyUsageChart(
+    date: LocalDate,
+    hours: List<HourlyDeviceUsage>,
+    selectedHour: Int,
+    today: LocalDate,
+    onHourSelected: (Int) -> Unit
+) {
+    val byHour = hours.associateBy { it.hour }
+    val maxUsage = hours.maxOfOrNull { it.totalUsageMillis }?.coerceAtLeast(1L) ?: 1L
+    val barColor = MaterialTheme.colorScheme.primary
+    val labelColor = MaterialTheme.colorScheme.onSurfaceVariant
+    val locale = LocalLocale.current.platformLocale
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState()),
+        verticalAlignment = Alignment.Top
+    ) {
+        (0..23).forEach { hour ->
+                val usage = byHour[hour]?.totalUsageMillis ?: 0L
+                val future = isFutureHour(date, hour, today)
+                val selected = hour == selectedHour
+                val fraction = (usage.toFloat() / maxUsage).coerceIn(0f, 1f)
+                val targetHeight = if (!future && usage > 0L) {
+                    (130f * fraction).dp.coerceAtLeast(4.dp)
+                } else {
+                    4.dp
+                }
+                val barHeight by animateDpAsState(
+                    targetValue = targetHeight,
+                    animationSpec = tween(220),
+                    label = "hourBar"
+                )
+                Column(
+                    modifier = Modifier
+                        .width(32.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(
+                            if (selected) barColor.copy(alpha = 0.12f) else Color.Transparent
+                        )
+                        .clickable(enabled = !future) { onHourSelected(hour) }
+                        .padding(horizontal = 2.dp, vertical = 6.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(130.dp),
+                        contentAlignment = Alignment.BottomCenter
+                    ) {
+                        if (!future) {
+                            Box(
+                                modifier = Modifier
+                                    .width(16.dp)
+                                    .height(barHeight)
+                                    .clip(RoundedCornerShape(topStart = 6.dp, topEnd = 6.dp))
+                                    .background(
+                                        if (selected) barColor else barColor.copy(alpha = 0.65f)
+                                    )
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = if (hour % 3 == 0 || selected) {
+                            hourTickLabel(hour, locale)
+                        } else {
+                            ""
+                        },
+                        modifier = Modifier.height(14.dp),
+                        color = if (selected) {
+                            MaterialTheme.colorScheme.onSurface
+                        } else {
+                            labelColor
+                        },
+                        fontSize = 9.sp,
+                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal
+                    )
+                }
+        }
+    }
+}
+
+@Composable
+private fun HourDetailCard(
+    hour: Int,
+    usageMillis: Long?,
+    recorded: Boolean
+) {
+    val locale = LocalLocale.current.platformLocale
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(chartSurfaceColor(0.16f))
+            .padding(14.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        Text(
+            text = formatHourRange(hour, locale),
+            color = MaterialTheme.colorScheme.onSurface,
+            fontWeight = FontWeight.SemiBold
+        )
+        Text(
+            text = if (recorded) "Screen time" else "No usage yet",
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            fontSize = 12.sp
+        )
+        Text(
+            text = if (recorded && usageMillis != null) {
+                formatHistoryDuration(usageMillis)
+            } else {
+                "—"
+            },
+            color = MaterialTheme.colorScheme.onSurface,
+            fontSize = 22.sp,
+            fontWeight = FontWeight.Bold
+        )
+    }
+}
+
+private fun isFutureHour(date: LocalDate, hour: Int, today: LocalDate): Boolean {
+    return date == today && hour > LocalTime.now().hour
+}
+
+private fun hourTickLabel(hour: Int, locale: java.util.Locale): String {
+    return LocalTime.of(hour, 0).format(DateTimeFormatter.ofPattern("h", locale))
+}
+
+private fun formatHourRange(hour: Int, locale: java.util.Locale): String {
+    val start = LocalTime.of(hour, 0)
+    val end = start.plusHours(1)
+    val pattern = DateTimeFormatter.ofPattern("h:mm a", locale)
+    return "${start.format(pattern)} – ${end.format(pattern)}"
 }
 
 @Composable

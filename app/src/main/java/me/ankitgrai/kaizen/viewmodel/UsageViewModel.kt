@@ -11,6 +11,7 @@ import kotlinx.coroutines.launch
 import me.ankitgrai.kaizen.data.usage.AppUsageInfo
 import me.ankitgrai.kaizen.data.usage.DailyAppUsage
 import me.ankitgrai.kaizen.data.usage.DailyDeviceUsage
+import me.ankitgrai.kaizen.data.usage.HourlyDeviceUsage
 import me.ankitgrai.kaizen.data.usage.InstalledAppInfo
 import me.ankitgrai.kaizen.data.usage.UsageRepository
 import me.ankitgrai.kaizen.ui.components.AppUsage
@@ -42,6 +43,13 @@ data class HistoryUiState(
     val days: List<DailyDeviceUsage> = emptyList(),
     val error: String? = null
 )
+
+data class DayHoursUiState(
+    val date: LocalDate? = null,
+    val isLoading: Boolean = false,
+    val hours: List<HourlyDeviceUsage> = emptyList(),
+    val available: Boolean = false
+)
 class UsageViewModel(
     application: Application
 ): AndroidViewModel(application){
@@ -56,6 +64,9 @@ class UsageViewModel(
 
     private val _historyState = MutableStateFlow(HistoryUiState())
 
+    private val _dayHoursState = MutableStateFlow(DayHoursUiState())
+    val dayHoursState: StateFlow<DayHoursUiState> = _dayHoursState.asStateFlow()
+
     val historyState: StateFlow<HistoryUiState> =
         _historyState.asStateFlow()
     val appDetailsState: StateFlow<AppDetailsUiState> =
@@ -68,6 +79,28 @@ class UsageViewModel(
     fun refresh(force: Boolean = false) {
         viewModelScope.launch {
             refreshToday(force)
+        }
+    }
+
+    fun loadDayHours(date: LocalDate) {
+        viewModelScope.launch {
+            _dayHoursState.value = DayHoursUiState(date = date, isLoading = true)
+            try {
+                val hours = repository.getHourlyDeviceUsage(date)
+                if (_dayHoursState.value.date != date) return@launch
+                _dayHoursState.value = DayHoursUiState(
+                    date = date,
+                    isLoading = false,
+                    hours = hours,
+                    available = hours.isNotEmpty()
+                )
+            } catch (exception: Exception) {
+                if (_dayHoursState.value.date != date) return@launch
+                _dayHoursState.value = DayHoursUiState(
+                    date = date,
+                    isLoading = false
+                )
+            }
         }
     }
 

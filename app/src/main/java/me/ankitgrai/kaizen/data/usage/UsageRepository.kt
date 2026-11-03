@@ -10,6 +10,7 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import me.ankitgrai.kaizen.data.local.DailyAppUsageEntity
 import me.ankitgrai.kaizen.data.local.DailyDeviceUsageEntity
+import me.ankitgrai.kaizen.data.local.HourlyDeviceUsageEntity
 import me.ankitgrai.kaizen.data.local.KaizenDatabase
 
 class UsageRepository (context: Context){
@@ -108,6 +109,19 @@ class UsageRepository (context: Context){
         }
     }
 
+    suspend fun getHourlyDeviceUsage(date: LocalDate): List<HourlyDeviceUsage> {
+        return withContext(Dispatchers.IO) {
+            refreshUsage()
+            historyDao.hoursOnDate(date.toString()).map {
+                HourlyDeviceUsage(
+                    date = date,
+                    hour = it.hour,
+                    totalUsageMillis = it.totalUsageMillis
+                )
+            }
+        }
+    }
+
     suspend fun getTopAppsForDate(date: LocalDate): List<AppUsageInfo> {
         return withContext(Dispatchers.IO) {
             val installed = getInstalledApps().map { it.packageName }.toSet()
@@ -193,6 +207,15 @@ class UsageRepository (context: Context){
                             date = day.date.toString(),
                             packageName = day.packageName,
                             totalUsageMillis = day.totalUsageMillis
+                        )
+                    }
+                )
+                historyDao.upsertDeviceHours(
+                    observed.hourTotals.map { hour ->
+                        HourlyDeviceUsageEntity(
+                            date = hour.date.toString(),
+                            hour = hour.hour,
+                            totalUsageMillis = hour.totalUsageMillis
                         )
                     }
                 )

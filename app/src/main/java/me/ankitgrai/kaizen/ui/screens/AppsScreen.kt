@@ -2,9 +2,10 @@ package me.ankitgrai.kaizen.ui.screens
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
@@ -27,6 +28,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import me.ankitgrai.kaizen.ui.components.AppSearchBar
 import me.ankitgrai.kaizen.ui.components.KaizenPullToRefresh
 import me.ankitgrai.kaizen.ui.components.AppUsageRow
+import me.ankitgrai.kaizen.ui.components.KaizenScrollItem
 import me.ankitgrai.kaizen.ui.components.CategoryFilter
 import me.ankitgrai.kaizen.ui.theme.KaizenTheme
 import me.ankitgrai.kaizen.viewmodel.UsageViewModel
@@ -108,9 +110,13 @@ fun AppsScreen(
         modifier = Modifier.fillMaxSize()
     ) {
     LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = 20.dp, vertical = 24.dp),
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(
+            start = 20.dp,
+            end = 20.dp,
+            top = 24.dp,
+            bottom = 120.dp
+        ),
         verticalArrangement = Arrangement.spacedBy(18.dp)
     ) {
         item {
@@ -231,18 +237,20 @@ fun AppsScreen(
                 )
             }
 
-            else -> items(
+            else -> itemsIndexed(
                 items = filteredApps,
-                key = { it.packageName }
-            ) { app ->
-                AppUsageRow(
-                    app = app,
-                    onClick = {
-                        if (app.packageName.isNotBlank()) {
-                            onAppClick(app.packageName)
+                key = { _, app -> app.packageName }
+            ) { index, app ->
+                KaizenScrollItem(index = index) {
+                    AppUsageRow(
+                        app = app,
+                        onClick = {
+                            if (app.packageName.isNotBlank()) {
+                                onAppClick(app.packageName)
+                            }
                         }
-                    }
-                )
+                    )
+                }
             }
         }
 

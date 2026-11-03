@@ -88,7 +88,7 @@ fun OverviewScreen(
     val scope = rememberCoroutineScope()
     var selectedDate by remember { mutableStateOf(LocalDate.now()) }
     val targetUsageMillis = LocalScreenTimeSettings.current?.targetMillis
-        ?: ScreenTimeSettings.DEFAULT_TARGET_MINUTES * 60_000L
+        ?: (ScreenTimeSettings.DEFAULT_TARGET_MINUTES * 60_000L)
 
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
         usageViewModel.refresh()
@@ -117,6 +117,7 @@ fun OverviewScreen(
 
 @Composable
 fun OverviewContent(
+    modifier: Modifier = Modifier,
     uiState: UsageUiState,
     historyState: HistoryUiState,
     dayAppsState: DayAppsUiState,
@@ -128,8 +129,7 @@ fun OverviewContent(
     onRefreshUsage: () -> Unit,
     onAppClick: (String) -> Unit,
     onOpenSettings: () -> Unit,
-    targetUsageMillis: Long = ScreenTimeSettings.DEFAULT_TARGET_MINUTES * 60_000L,
-    modifier: Modifier = Modifier
+    targetUsageMillis: Long = ScreenTimeSettings.DEFAULT_TARGET_MINUTES * 60_000L
 ) {
     KaizenPullToRefresh(
         isRefreshing = isRefreshing,
@@ -140,7 +140,7 @@ fun OverviewContent(
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 20.dp, vertical = 24.dp),
+                .padding(start = 20.dp, end = 20.dp, top = 24.dp, bottom = 120.dp),
             verticalArrangement = Arrangement.spacedBy(24.dp)
         ) {
             // Header
@@ -265,14 +265,14 @@ fun OverviewContent(
 
 @Composable
 fun UsageSummary(
+    modifier: Modifier = Modifier,
     totalUsageMillis: Long,
     isLoading: Boolean,
     hasUsageAccess: Boolean,
     error: String?,
     onGrantAccess: () -> Unit,
     onRefresh: () -> Unit,
-    targetUsageMillis: Long = ScreenTimeSettings.DEFAULT_TARGET_MINUTES * 60_000L,
-    modifier: Modifier = Modifier
+    targetUsageMillis: Long = ScreenTimeSettings.DEFAULT_TARGET_MINUTES * 60_000L
 ) {
     Row(
         modifier = modifier

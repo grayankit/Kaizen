@@ -8,6 +8,12 @@ data class AppDayUsage(
     val totalUsageMillis: Long
 )
 
+data class HourlyDeviceUsage(
+    val date: LocalDate,
+    val hour: Int,
+    val totalUsageMillis: Long
+)
+
 /**
  * Days the event log still covers.
  * [earliestObserved] is null when Android returned no events.
@@ -16,5 +22,6 @@ data class AppDayUsage(
 data class ObservedUsage(
     val earliestObserved: LocalDate?,
     val deviceTotals: Map<LocalDate, Long>,
-    val appTotals: List<AppDayUsage>
+    val appTotals: List<AppDayUsage>,
+    val hourTotals: List<HourlyDeviceUsage> = emptyList()
 )
