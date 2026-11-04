@@ -44,17 +44,16 @@ fun PeriodSelector(
             Box(
                 modifier = Modifier
                     .weight(1f)
+                    .roundedClickable(RoundedCornerShape(14.dp)) {
+                        onPeriodSelected(period)
+                    }
                     .background(
-                        color = if (selected) {
+                        if (selected) {
                             MaterialTheme.colorScheme.primaryContainer
                         } else {
                             Color.Transparent
-                        },
-                        shape = RoundedCornerShape(14.dp)
+                        }
                     )
-                    .clickable {
-                        onPeriodSelected(period)
-                    }
                     .padding(
                         horizontal = 12.dp,
                         vertical = 9.dp

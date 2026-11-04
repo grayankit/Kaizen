@@ -47,6 +47,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import me.ankitgrai.kaizen.data.usage.DailyDeviceUsage
 import me.ankitgrai.kaizen.data.usage.HourlyDeviceUsage
 import me.ankitgrai.kaizen.ui.components.PeriodSelector
+import me.ankitgrai.kaizen.ui.components.roundedClickable
 import me.ankitgrai.kaizen.ui.components.UsagePeriod
 import me.ankitgrai.kaizen.ui.theme.KaizenTheme
 import me.ankitgrai.kaizen.viewmodel.UsageViewModel
@@ -537,11 +538,13 @@ private fun HourlyUsageChart(
                 Column(
                     modifier = Modifier
                         .width(32.dp)
-                        .clip(RoundedCornerShape(10.dp))
+                        .roundedClickable(
+                            shape = RoundedCornerShape(10.dp),
+                            enabled = !future
+                        ) { onHourSelected(hour) }
                         .background(
                             if (selected) barColor.copy(alpha = 0.12f) else Color.Transparent
                         )
-                        .clickable(enabled = !future) { onHourSelected(hour) }
                         .padding(horizontal = 2.dp, vertical = 6.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
@@ -687,7 +690,12 @@ private fun HistoryUsageChart(
                 Column(
                     modifier = Modifier
                         .width(itemWidth)
-                        .clip(RoundedCornerShape(12.dp))
+                        .roundedClickable(
+                            shape = RoundedCornerShape(12.dp),
+                            enabled = !day.date.isAfter(today)
+                        ) {
+                            onDaySelected(day.date)
+                        }
                         .background(
                             if (selected) {
                                 barColor.copy(alpha = 0.12f)
@@ -695,11 +703,6 @@ private fun HistoryUsageChart(
                                 Color.Transparent
                             }
                         )
-                        .clickable(
-                            enabled = !day.date.isAfter(today)
-                        ) {
-                            onDaySelected(day.date)
-                        }
                         .padding(horizontal = 2.dp, vertical = 6.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {

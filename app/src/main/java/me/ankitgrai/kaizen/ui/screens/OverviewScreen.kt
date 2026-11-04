@@ -59,6 +59,7 @@ import me.ankitgrai.kaizen.settings.LocalScreenTimeSettings
 import me.ankitgrai.kaizen.settings.ScreenTimeSettings
 import me.ankitgrai.kaizen.settings.formatScreenTimeTarget
 import me.ankitgrai.kaizen.ui.components.AppUsageRow
+import me.ankitgrai.kaizen.ui.components.roundedClickable
 import me.ankitgrai.kaizen.ui.components.CircularUsageIndicator
 import me.ankitgrai.kaizen.ui.components.KaizenPullToRefresh
 import me.ankitgrai.kaizen.ui.theme.chartSurfaceColor
@@ -429,11 +430,13 @@ fun WeeklyUsageCard(
                         modifier = Modifier
                             .weight(1f)
                             .fillMaxHeight()
-                            .clip(RoundedCornerShape(12.dp))
-                            .semantics { contentDescription = contentDesc }
-                            .clickable(enabled = isClickable) {
+                            .roundedClickable(
+                                shape = RoundedCornerShape(12.dp),
+                                enabled = isClickable
+                            ) {
                                 onDaySelected(day.date)
-                            },
+                            }
+                            .semantics { contentDescription = contentDesc },
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.Bottom
                     ) {

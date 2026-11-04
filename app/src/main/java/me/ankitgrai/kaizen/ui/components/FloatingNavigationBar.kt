@@ -143,8 +143,7 @@ private fun NavigationItem(
         modifier = modifier
             .width(width)
             .height(ItemHeight)
-            .clip(CircleShape)
-            .clickable(onClick = onClick)
+            .roundedClickable(CircleShape, onClick = onClick)
             .padding(start = 13.dp, end = 13.dp),
         horizontalArrangement = Arrangement.Start,
         verticalAlignment = Alignment.CenterVertically

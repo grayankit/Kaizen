@@ -48,6 +48,7 @@ import me.ankitgrai.kaizen.settings.ScreenTimeSettings
 import me.ankitgrai.kaizen.settings.formatScreenTimeTarget
 import me.ankitgrai.kaizen.settings.snapTargetMinutes
 import me.ankitgrai.kaizen.ui.components.KaizenScrollItem
+import me.ankitgrai.kaizen.ui.components.roundedClickable
 import me.ankitgrai.kaizen.ui.theme.AppThemeId
 import me.ankitgrai.kaizen.ui.theme.LocalThemeSettings
 import me.ankitgrai.kaizen.ui.theme.colorScheme
@@ -171,9 +172,8 @@ private fun ScreenTimeTargetRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
+            .roundedClickable(RoundedCornerShape(16.dp), onClick = onClick)
             .background(scheme.surfaceVariant)
-            .clickable(onClick = onClick)
             .padding(14.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
@@ -215,9 +215,8 @@ private fun ThemeModeRow(
                 text = mode.label,
                 color = if (isSelected) scheme.onPrimary else scheme.onSurfaceVariant,
                 modifier = Modifier
-                    .clip(RoundedCornerShape(50))
+                    .roundedClickable(RoundedCornerShape(50)) { onSelect(mode) }
                     .background(if (isSelected) scheme.primary else scheme.surfaceVariant)
-                    .clickable { onSelect(mode) }
                     .padding(horizontal = 14.dp, vertical = 8.dp)
             )
         }
@@ -265,9 +264,8 @@ private fun ThemeOptionRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
+            .roundedClickable(RoundedCornerShape(16.dp), onClick = onClick)
             .background(if (selected) scheme.primaryContainer else scheme.surfaceVariant)
-            .clickable(onClick = onClick)
             .padding(14.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(14.dp)

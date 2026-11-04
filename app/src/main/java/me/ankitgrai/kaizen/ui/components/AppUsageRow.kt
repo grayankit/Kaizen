@@ -46,9 +46,8 @@ fun AppUsageRow(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(17.dp))
+            .roundedClickable(RoundedCornerShape(17.dp), onClick = onClick)
             .background(chartSurfaceColor())
-            .clickable(onClick = onClick)
             .padding(12.dp)
     ) {
         Row(

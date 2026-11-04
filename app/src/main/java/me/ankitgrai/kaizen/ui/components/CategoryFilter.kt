@@ -58,7 +58,9 @@ fun CategoryFilter(
                 fontWeight = if(selected) FontWeight.SemiBold else FontWeight.Normal,
                 maxLines = 1,
                 modifier = Modifier
-                    .clip(RoundedCornerShape(50))
+                    .roundedClickable(RoundedCornerShape(50)) {
+                        onCategorySelected(category)
+                    }
                     .background(
                         if (selected) {
                             MaterialTheme.colorScheme.primaryContainer
@@ -66,9 +68,6 @@ fun CategoryFilter(
                             MaterialTheme.colorScheme.surfaceContainerHigh
                         }
                     )
-                    .clickable {
-                        onCategorySelected(category)
-                    }
                     .padding(horizontal = 16.dp, vertical = 8.dp)
             )
         }

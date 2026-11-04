@@ -59,14 +59,13 @@ fun WeeklyUsageChart(
             Column(
                 modifier = Modifier
                     .weight(1f)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(
-                        if(isSelected) selectedBackground
-                        else Color.Transparent
-                    )
-                    .clickable{
+                    .roundedClickable(RoundedCornerShape(12.dp)) {
                         onDaySelected(day.date)
                     }
+                    .background(
+                        if (isSelected) selectedBackground
+                        else Color.Transparent
+                    )
                     .padding(
                         horizontal = 2.dp,
                         vertical = 6.dp
