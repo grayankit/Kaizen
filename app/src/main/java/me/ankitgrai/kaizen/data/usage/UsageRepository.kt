@@ -12,6 +12,7 @@ import me.ankitgrai.kaizen.data.local.DailyAppUsageEntity
 import me.ankitgrai.kaizen.data.local.DailyDeviceUsageEntity
 import me.ankitgrai.kaizen.data.local.HourlyDeviceUsageEntity
 import me.ankitgrai.kaizen.data.local.KaizenDatabase
+import me.ankitgrai.kaizen.widget.WidgetUpdater
 
 class UsageRepository (context: Context){
     private val appContext = context.applicationContext
@@ -178,9 +179,12 @@ class UsageRepository (context: Context){
      * One event walk for every screen. Callers that arrive while this is running
      * wait for it, and a finished snapshot is reused for a minute.
      */
-    suspend fun refreshUsage(force: Boolean = false): List<AppUsageInfo> {
+    suspend fun refreshUsage(
+        force: Boolean = false,
+        publishWidget: Boolean = true
+    ): List<AppUsageInfo> {
         return withContext(Dispatchers.IO) {
-            refreshMutex.withLock {
+            val usage = refreshMutex.withLock {
                 val now = System.currentTimeMillis()
                 if (!force && snapshotReady && now - snapshotAt < SNAPSHOT_TTL_MS) {
                     return@withLock cachedToday
@@ -240,6 +244,10 @@ class UsageRepository (context: Context){
                 snapshotReady = true
                 cachedToday
             }
+            if (publishWidget) {
+                WidgetUpdater.publish(appContext)
+            }
+            usage
         }
     }
 

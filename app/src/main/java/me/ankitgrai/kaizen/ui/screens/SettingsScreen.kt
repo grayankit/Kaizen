@@ -35,14 +35,17 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.launch
 import me.ankitgrai.kaizen.settings.LocalScreenTimeSettings
 import me.ankitgrai.kaizen.settings.ScreenTimeSettings
 import me.ankitgrai.kaizen.settings.formatScreenTimeTarget
@@ -53,6 +56,7 @@ import me.ankitgrai.kaizen.ui.theme.AppThemeId
 import me.ankitgrai.kaizen.ui.theme.LocalThemeSettings
 import me.ankitgrai.kaizen.ui.theme.colorScheme
 import me.ankitgrai.kaizen.ui.theme.ThemeMode
+import me.ankitgrai.kaizen.widget.WidgetUpdater
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -62,6 +66,8 @@ fun SettingsScreen(
     val settings = LocalThemeSettings.current ?: return
     val screenTime = LocalScreenTimeSettings.current
     val scheme = MaterialTheme.colorScheme
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     var showTargetDialog by remember { mutableStateOf(false) }
 
     Column(modifier = Modifier.fillMaxSize()) {
@@ -158,6 +164,7 @@ fun SettingsScreen(
             onConfirm = { minutes ->
                 screenTime.selectTargetMinutes(minutes)
                 showTargetDialog = false
+                scope.launch { WidgetUpdater.update(context) }
             }
         )
     }

@@ -1,3 +1,7 @@
 <resources>
     <string name="app_name">kaizen</string>
+    <string name="widget_screen_time">Screen time</string>
+    <string name="widget_screen_time_description">Today\'s screen time against your daily target</string>
+    <string name="widget_grant_access">Grant usage access</string>
+    <string name="widget_open_app">Tap to open Kaizen</string>
 </resources>

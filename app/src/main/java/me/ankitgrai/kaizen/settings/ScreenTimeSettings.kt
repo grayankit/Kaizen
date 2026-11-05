@@ -38,6 +38,13 @@ class ScreenTimeSettings(context: Context) {
 
         private const val PREFS_NAME = "kaizen_screen_time"
         private const val KEY_TARGET_MINUTES = "daily_target_minutes"
+
+        fun readTargetMillis(context: Context): Long {
+            val minutes = context.applicationContext
+                .getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                .getInt(KEY_TARGET_MINUTES, DEFAULT_TARGET_MINUTES)
+            return snapTargetMinutes(minutes) * 60_000L
+        }
     }
 }
 

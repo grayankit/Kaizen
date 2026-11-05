@@ -26,6 +26,7 @@ Kaizen is a simple, local-first screen-time tracker for Android. See today's usa
 ## Why you'll like it
 
 - **Understand your day:** View total screen time and your top apps at a glance.
+- **Check from the home screen:** A small widget shows today's total against your daily target.
 - **Explore your usage:** Browse installed apps, search them, and open each app's history.
 - **Spot patterns:** Switch between daily, weekly, and monthly usage charts.
 - **Make it yours:** Choose system, light, or dark mode; Material You or a preset palette; and optional OLED black.
