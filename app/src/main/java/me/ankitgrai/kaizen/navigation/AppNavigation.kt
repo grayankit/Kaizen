@@ -38,10 +38,12 @@ import me.ankitgrai.kaizen.ui.screens.AppsScreen
 import me.ankitgrai.kaizen.ui.screens.HistoryScreen
 import me.ankitgrai.kaizen.ui.screens.OverviewScreen
 import me.ankitgrai.kaizen.ui.screens.SettingsScreen
+import me.ankitgrai.kaizen.ui.screens.SplashScreen
 import me.ankitgrai.kaizen.ui.theme.KaizenTheme
 import me.ankitgrai.kaizen.viewmodel.UsageViewModel
 
 private object Routes{
+    const val SPLASH = "splash"
     const val OVERVIEW = "overview"
     const val APPS = "apps"
     const val HISTORY = "history"
@@ -62,7 +64,9 @@ fun AppNavigation(){
         Routes.HISTORY -> CurrentScreen.History
         else -> CurrentScreen.Overview
     }
-    val showNavigationBar = currentRoute != Routes.APP_DETAILS && currentRoute != Routes.SETTINGS
+    val showNavigationBar = currentRoute != Routes.APP_DETAILS
+            && currentRoute != Routes.SETTINGS
+            && currentRoute != Routes.SPLASH
     Scaffold(
         containerColor = androidx.compose.material3.MaterialTheme.colorScheme.background,
         contentWindowInsets = WindowInsets.safeDrawing.exclude(WindowInsets.navigationBars)
@@ -73,15 +77,27 @@ fun AppNavigation(){
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
-        NavHost(
+    NavHost(
             navController = navController,
-            startDestination = Routes.OVERVIEW,
+            startDestination = Routes.SPLASH,
             modifier = Modifier.fillMaxSize(),
             enterTransition = { tabEnter(initialState, targetState) },
             exitTransition = { tabExit(initialState, targetState) },
             popEnterTransition = { tabEnter(initialState, targetState) },
             popExitTransition = { tabExit(initialState, targetState) }
         ){
+            // Splash is the first screen shown. No top/bottom bar on it.
+            composable(Routes.SPLASH) {
+                SplashScreen(
+                    onSplashFinished = {
+                        navController.navigate(Routes.OVERVIEW) {
+                            // Remove splash from the back stack so pressing Back
+                            // from Overview exits the app instead of returning here
+                            popUpTo(Routes.SPLASH) { inclusive = true }
+                        }
+                    }
+                )
+            }
             composable (Routes.OVERVIEW){
                 OverviewScreen(
                     onAppClick = { packageName ->

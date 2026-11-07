@@ -2,4 +2,15 @@
 <resources>
 
     <style name="Theme.Kaizen" parent="android:Theme.Material.Light.NoActionBar" />
+
+    <!-- Native splash screen theme (Android 12+ SplashScreen API) -->
+    <style name="Theme.Kaizen.Splash" parent="Theme.SplashScreen">
+        <!-- Dark background that matches the app -->
+        <item name="windowSplashScreenBackground">#FF1A1A2E</item>
+        <!-- The centered icon shown on the splash -->
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_launcher_foreground</item>
+        <!-- After the splash, transition into the main app theme -->
+        <item name="postSplashScreenTheme">@style/Theme.Kaizen</item>
+    </style>
+
 </resources>
