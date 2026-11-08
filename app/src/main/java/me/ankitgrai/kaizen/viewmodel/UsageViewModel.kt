@@ -8,6 +8,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import me.ankitgrai.kaizen.data.reel.DailyReelCount
+import me.ankitgrai.kaizen.data.reel.ReelRepository
 import me.ankitgrai.kaizen.data.usage.AppUsageInfo
 import me.ankitgrai.kaizen.data.usage.DailyAppUsage
 import me.ankitgrai.kaizen.data.usage.DailyDeviceUsage
@@ -53,9 +55,11 @@ data class DayHoursUiState(
 class UsageViewModel(
     application: Application
 ): AndroidViewModel(application){
-    private val  repository = UsageRepository(application)
+    private val repository = UsageRepository(application)
+    private val reelRepository = ReelRepository(application)
+    private var enabledReelApps: Set<String> = emptySet()
 
-    private val _uiState  = MutableStateFlow(UsageUiState())
+    private val _uiState = MutableStateFlow(UsageUiState())
 
     private val _appDetailsState = MutableStateFlow(AppDetailsUiState())
 
@@ -67,11 +71,17 @@ class UsageViewModel(
     private val _dayHoursState = MutableStateFlow(DayHoursUiState())
     val dayHoursState: StateFlow<DayHoursUiState> = _dayHoursState.asStateFlow()
 
+    private val _reelCountToday = MutableStateFlow(0)
+    val reelCountToday: StateFlow<Int> = _reelCountToday.asStateFlow()
+
+    private val _reelHistory = MutableStateFlow<List<DailyReelCount>>(emptyList())
+    val reelHistory: StateFlow<List<DailyReelCount>> = _reelHistory.asStateFlow()
+
     val historyState: StateFlow<HistoryUiState> =
         _historyState.asStateFlow()
     val appDetailsState: StateFlow<AppDetailsUiState> =
         _appDetailsState.asStateFlow()
-    val uiState: StateFlow<UsageUiState>  = _uiState.asStateFlow()
+    val uiState: StateFlow<UsageUiState> = _uiState.asStateFlow()
 
     private val _isRefreshing = MutableStateFlow(false)
     val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
@@ -79,6 +89,20 @@ class UsageViewModel(
     fun refresh(force: Boolean = false) {
         viewModelScope.launch {
             refreshToday(force)
+        }
+    }
+
+    fun refreshReel(enabledApps: Set<String>) {
+        enabledReelApps = enabledApps
+        viewModelScope.launch { refreshReelNow() }
+    }
+
+    private suspend fun refreshReelNow() {
+        val enabledApps = enabledReelApps
+        runCatching {
+            reelRepository.refresh(enabledApps)
+            _reelCountToday.value = reelRepository.todayTotal(enabledApps)
+            _reelHistory.value = reelRepository.last7Days(enabledApps)
         }
     }
 
@@ -116,6 +140,7 @@ class UsageViewModel(
         try {
             refreshToday(force = true)
             refreshHistoryNow(force = false)
+            refreshReelNow()
         } finally {
             _isRefreshing.value = false
         }

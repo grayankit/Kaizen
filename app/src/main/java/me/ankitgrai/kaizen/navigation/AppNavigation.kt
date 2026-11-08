@@ -37,6 +37,7 @@ import me.ankitgrai.kaizen.ui.screens.AppDetailsScreen
 import me.ankitgrai.kaizen.ui.screens.AppsScreen
 import me.ankitgrai.kaizen.ui.screens.HistoryScreen
 import me.ankitgrai.kaizen.ui.screens.OverviewScreen
+import me.ankitgrai.kaizen.ui.screens.ReelDetailScreen
 import me.ankitgrai.kaizen.ui.screens.SettingsScreen
 import me.ankitgrai.kaizen.ui.screens.SplashScreen
 import me.ankitgrai.kaizen.ui.theme.KaizenTheme
@@ -49,6 +50,7 @@ private object Routes{
     const val HISTORY = "history"
     const val APP_DETAILS = "app_details/{packageName}"
     const val SETTINGS = "settings"
+    const val REELS = "reels"
 }
 
 @Composable
@@ -67,6 +69,7 @@ fun AppNavigation(){
     val showNavigationBar = currentRoute != Routes.APP_DETAILS
             && currentRoute != Routes.SETTINGS
             && currentRoute != Routes.SPLASH
+            && currentRoute != Routes.REELS
     Scaffold(
         containerColor = androidx.compose.material3.MaterialTheme.colorScheme.background,
         contentWindowInsets = WindowInsets.safeDrawing.exclude(WindowInsets.navigationBars)
@@ -107,8 +110,14 @@ fun AppNavigation(){
                     },
                     onOpenSettings = {
                         navController.navigate(Routes.SETTINGS)
-                    }
+                    },
+                    onSeeReelHistory = {
+                        navController.navigate(Routes.REELS)
+                    },
                 )
+            }
+            composable(Routes.REELS) {
+                ReelDetailScreen(onBack = { navController.popBackStack() })
             }
             composable(Routes.SETTINGS) {
                 SettingsScreen(

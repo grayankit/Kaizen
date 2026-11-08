@@ -4,9 +4,11 @@ import android.content.Context
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.core.content.edit
 import kotlin.math.roundToInt
+import me.ankitgrai.kaizen.data.reel.ReelApps
 
 class ScreenTimeSettings(context: Context) {
     private val prefs = context.applicationContext
@@ -18,6 +20,15 @@ class ScreenTimeSettings(context: Context) {
     )
         private set
 
+    var reelApps by mutableStateOf(
+        prefs.getString(KEY_REEL_APPS, null)
+            ?.split(",")
+            ?.filter { it.isNotBlank() }
+            ?.toSet()
+            ?: ReelApps.defaults.keys
+    )
+        private set
+
     val targetMillis: Long
         get() = targetMinutes * 60_000L
 
@@ -25,6 +36,11 @@ class ScreenTimeSettings(context: Context) {
         val snapped = snapTargetMinutes(minutes)
         targetMinutes = snapped
         prefs.edit { putInt(KEY_TARGET_MINUTES, snapped) }
+    }
+
+    fun selectReelApps(apps: Set<String>) {
+        reelApps = apps
+        prefs.edit { putString(KEY_REEL_APPS, apps.joinToString(",")) }
     }
 
     companion object {
@@ -38,6 +54,7 @@ class ScreenTimeSettings(context: Context) {
 
         private const val PREFS_NAME = "kaizen_screen_time"
         private const val KEY_TARGET_MINUTES = "daily_target_minutes"
+        private const val KEY_REEL_APPS = "reel_apps"
 
         fun readTargetMillis(context: Context): Long {
             val minutes = context.applicationContext

@@ -46,6 +46,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
+import me.ankitgrai.kaizen.data.reel.ReelApps
 import me.ankitgrai.kaizen.settings.LocalScreenTimeSettings
 import me.ankitgrai.kaizen.settings.ScreenTimeSettings
 import me.ankitgrai.kaizen.settings.formatScreenTimeTarget
@@ -69,6 +70,13 @@ fun SettingsScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var showTargetDialog by remember { mutableStateOf(false) }
+    val installedReelApps = remember(context) {
+        ReelApps.defaults.filter { (packageName, _) ->
+            runCatching {
+                context.packageManager.getApplicationInfo(packageName, 0)
+            }.isSuccess
+        }
+    }
 
     Column(modifier = Modifier.fillMaxSize()) {
         TopAppBar(
@@ -107,6 +115,41 @@ fun SettingsScreen(
                             minutes = screenTime.targetMinutes,
                             onClick = { showTargetDialog = true }
                         )
+                    }
+                }
+
+                if (installedReelApps.isNotEmpty()) {
+                    item(key = "reel-heading") {
+                        Text(
+                            text = "Reel counter",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                    }
+                    item(key = "reel-description") {
+                        Text(
+                            text = "Track how many reels you watch in these apps.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = scheme.onSurfaceVariant,
+                        )
+                    }
+                    installedReelApps.entries.forEachIndexed { index, (pkg, label) ->
+                        item(key = "reel-$pkg") {
+                            KaizenScrollItem(index = index) {
+                                ReelAppRow(
+                                    label = label,
+                                    checked = pkg in screenTime.reelApps,
+                                    onCheckedChange = { enabled ->
+                                        val updated = if (enabled) {
+                                            screenTime.reelApps + pkg
+                                        } else {
+                                            screenTime.reelApps - pkg
+                                        }
+                                        screenTime.selectReelApps(updated)
+                                    },
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -345,6 +388,28 @@ private fun ScreenTimeTargetDialog(
             }
         }
     )
+}
+
+@Composable
+private fun ReelAppRow(
+    label: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+) {
+    val scheme = MaterialTheme.colorScheme
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold,
+            color = scheme.onSurface,
+        )
+        Switch(checked = checked, onCheckedChange = onCheckedChange)
+    }
 }
 
 @Composable

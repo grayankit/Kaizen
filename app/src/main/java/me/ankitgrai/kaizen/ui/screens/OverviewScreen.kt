@@ -59,6 +59,7 @@ import me.ankitgrai.kaizen.settings.LocalScreenTimeSettings
 import me.ankitgrai.kaizen.settings.ScreenTimeSettings
 import me.ankitgrai.kaizen.settings.formatScreenTimeTarget
 import me.ankitgrai.kaizen.ui.components.AppUsageRow
+import me.ankitgrai.kaizen.ui.components.ReelCountCard
 import me.ankitgrai.kaizen.ui.components.roundedClickable
 import me.ankitgrai.kaizen.ui.components.CircularUsageIndicator
 import me.ankitgrai.kaizen.ui.components.KaizenPullToRefresh
@@ -79,21 +80,25 @@ private val MAX_BAR_HEIGHT_DP = 76.dp
 fun OverviewScreen(
     onAppClick: (String) -> Unit = {},
     onOpenSettings: () -> Unit = {},
+    onSeeReelHistory: () -> Unit = {},
     usageViewModel: UsageViewModel = viewModel()
 ) {
     val uiState by usageViewModel.uiState.collectAsStateWithLifecycle()
     val historyState by usageViewModel.historyState.collectAsStateWithLifecycle()
     val dayAppsState by usageViewModel.dayAppsState.collectAsStateWithLifecycle()
     val isRefreshing by usageViewModel.isRefreshing.collectAsStateWithLifecycle()
+    val reelCountToday by usageViewModel.reelCountToday.collectAsStateWithLifecycle()
 
     val scope = rememberCoroutineScope()
     var selectedDate by remember { mutableStateOf(LocalDate.now()) }
     val targetUsageMillis = LocalScreenTimeSettings.current?.targetMillis
         ?: (ScreenTimeSettings.DEFAULT_TARGET_MINUTES * 60_000L)
+    val reelApps = LocalScreenTimeSettings.current?.reelApps ?: emptySet()
 
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
         usageViewModel.refresh()
         usageViewModel.refreshHistory()
+        usageViewModel.refreshReel(reelApps)
     }
 
     LaunchedEffect(selectedDate, historyState.days) {
@@ -106,13 +111,15 @@ fun OverviewScreen(
         dayAppsState = dayAppsState,
         isRefreshing = isRefreshing,
         selectedDate = selectedDate,
+        reelCountToday = reelCountToday,
         onDateSelected = { selectedDate = it },
         onRefreshAll = { scope.launch { usageViewModel.refreshAll() } },
         onGrantAccess = { usageViewModel.openUsageAccessSettings() },
         onRefreshUsage = { usageViewModel.refresh() },
         onAppClick = onAppClick,
         onOpenSettings = onOpenSettings,
-        targetUsageMillis = targetUsageMillis
+        onSeeReelHistory = onSeeReelHistory,
+        targetUsageMillis = targetUsageMillis,
     )
 }
 
@@ -124,13 +131,15 @@ fun OverviewContent(
     dayAppsState: DayAppsUiState,
     isRefreshing: Boolean,
     selectedDate: LocalDate,
+    reelCountToday: Int = 0,
     onDateSelected: (LocalDate) -> Unit,
     onRefreshAll: () -> Unit,
     onGrantAccess: () -> Unit,
     onRefreshUsage: () -> Unit,
     onAppClick: (String) -> Unit,
     onOpenSettings: () -> Unit,
-    targetUsageMillis: Long = ScreenTimeSettings.DEFAULT_TARGET_MINUTES * 60_000L
+    onSeeReelHistory: () -> Unit = {},
+    targetUsageMillis: Long = ScreenTimeSettings.DEFAULT_TARGET_MINUTES * 60_000L,
 ) {
     KaizenPullToRefresh(
         isRefreshing = isRefreshing,
@@ -186,6 +195,11 @@ fun OverviewContent(
                 days = historyState.days,
                 selectedDate = selectedDate,
                 onDaySelected = onDateSelected
+            )
+
+            ReelCountCard(
+                count = reelCountToday,
+                onSeeHistory = onSeeReelHistory,
             )
 
             // Most used applications
