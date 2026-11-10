@@ -2,6 +2,7 @@ package me.ankitgrai.kaizen.data.reel
 
 import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.AccessibilityServiceInfo
+import android.content.SharedPreferences
 import android.content.pm.ApplicationInfo
 import android.os.SystemClock
 import android.util.Log
@@ -18,21 +19,20 @@ class ReelAccessibilityService : AccessibilityService() {
     private val detectors = ReelDetectors()
     private val gate = SwipeGate()
     private val repository by lazy { ReelRepository(this) }
+    private var appsListener: SharedPreferences.OnSharedPreferenceChangeListener? = null
 
     override fun onServiceConnected() {
-        val info = serviceInfo ?: return
-        info.eventTypes = AccessibilityEvent.TYPE_VIEW_SCROLLED
-        info.packageNames = ReelApps.packages.toTypedArray()
-        info.feedbackType = AccessibilityServiceInfo.FEEDBACK_GENERIC
-        info.flags = 0
-        info.notificationTimeout = 0
-        serviceInfo = info
+        applyPackageFilter()
+        if (appsListener == null) {
+            appsListener = ScreenTimeSettings.registerReelAppsListener(this) {
+                applyPackageFilter()
+            }
+        }
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         if (event == null || event.eventType != AccessibilityEvent.TYPE_VIEW_SCROLLED) return
         val packageName = event.packageName?.toString() ?: return
-        if (packageName !in ReelApps.packages) return
         if (packageName !in ScreenTimeSettings.readReelApps(this)) return
         val className = event.className?.toString() ?: return
         val now = SystemClock.elapsedRealtime()
@@ -64,8 +64,25 @@ class ReelAccessibilityService : AccessibilityService() {
     override fun onInterrupt() = Unit
 
     override fun onDestroy() {
+        appsListener?.let { ScreenTimeSettings.unregisterReelAppsListener(this, it) }
+        appsListener = null
         scope.cancel()
         super.onDestroy()
+    }
+
+    private fun applyPackageFilter() {
+        val info = serviceInfo ?: return
+        val enabled = ScreenTimeSettings.readReelApps(this)
+        info.eventTypes = AccessibilityEvent.TYPE_VIEW_SCROLLED
+        info.packageNames = if (enabled.isEmpty()) {
+            arrayOf(packageName)
+        } else {
+            enabled.toTypedArray()
+        }
+        info.feedbackType = AccessibilityServiceInfo.FEEDBACK_GENERIC
+        info.flags = 0
+        info.notificationTimeout = 0
+        serviceInfo = info
     }
 
     private fun logScroll(

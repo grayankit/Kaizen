@@ -5,10 +5,10 @@ internal class ReelDetectors(
     private val youtube: ReelPlayerDetector = youtubeShortsDetector(),
     private val tiktok: ReelPlayerDetector = tiktokReelDetector(),
 ) {
-    fun forPackage(packageName: String): ReelPlayerDetector? = when (packageName) {
-        ReelApps.INSTAGRAM -> instagram
-        ReelApps.YOUTUBE -> youtube
-        ReelApps.TIKTOK, ReelApps.TIKTOK_LITE -> tiktok
-        else -> null
+    fun forPackage(packageName: String): ReelPlayerDetector? = when (ReelApps.family(packageName)) {
+        ReelFamily.Instagram -> instagram
+        ReelFamily.YouTube -> youtube
+        ReelFamily.TikTok -> tiktok
+        null -> null
     }
 }

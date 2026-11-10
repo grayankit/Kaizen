@@ -1,6 +1,7 @@
 package me.ankitgrai.kaizen.settings
 
 import android.content.Context
+import android.content.SharedPreferences
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -35,9 +36,14 @@ class ScreenTimeSettings(context: Context) {
     }
 
     fun selectReelApps(apps: Set<String>) {
-        val known = apps.filter { it in ReelApps.packages }.toSet()
-        reelApps = known
-        prefs.edit { putString(KEY_REEL_APPS, known.joinToString(",")) }
+        reelApps = apps
+        prefs.edit { putString(KEY_REEL_APPS, apps.joinToString(",")) }
+    }
+
+    fun pruneMissingReelApps(installed: Set<String>) {
+        if (!prefs.contains(KEY_REEL_APPS)) return
+        val pruned = reelApps.filter { it in installed }.toSet()
+        if (pruned != reelApps) selectReelApps(pruned)
     }
 
     companion object {
@@ -67,11 +73,33 @@ class ScreenTimeSettings(context: Context) {
             return parseReelApps(stored)
         }
 
+        fun registerReelAppsListener(
+            context: Context,
+            onChange: () -> Unit,
+        ): SharedPreferences.OnSharedPreferenceChangeListener {
+            val preferences = context.applicationContext
+                .getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+                if (key == KEY_REEL_APPS) onChange()
+            }
+            preferences.registerOnSharedPreferenceChangeListener(listener)
+            return listener
+        }
+
+        fun unregisterReelAppsListener(
+            context: Context,
+            listener: SharedPreferences.OnSharedPreferenceChangeListener,
+        ) {
+            context.applicationContext
+                .getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                .unregisterOnSharedPreferenceChangeListener(listener)
+        }
+
         private fun parseReelApps(stored: String?): Set<String> {
-            if (stored == null) return ReelApps.packages
+            if (stored == null) return ReelApps.official
             return stored.split(",")
                 .map { it.trim() }
-                .filter { it in ReelApps.packages }
+                .filter { it.isNotEmpty() }
                 .toSet()
         }
     }

@@ -1,5 +1,7 @@
 package me.ankitgrai.kaizen.ui.screens
 
+import android.os.Build
+import androidx.annotation.RequiresApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -33,6 +35,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -46,6 +49,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
@@ -56,10 +61,13 @@ import me.ankitgrai.kaizen.settings.LocalScreenTimeSettings
 import me.ankitgrai.kaizen.settings.ScreenTimeSettings
 import me.ankitgrai.kaizen.settings.formatScreenTimeTarget
 import me.ankitgrai.kaizen.settings.snapTargetMinutes
+import me.ankitgrai.kaizen.ui.components.AppIcon
 import me.ankitgrai.kaizen.ui.components.KaizenScrollItem
 import me.ankitgrai.kaizen.ui.components.roundedClickable
 import me.ankitgrai.kaizen.ui.theme.AppThemeId
+import me.ankitgrai.kaizen.ui.theme.KaizenTheme
 import me.ankitgrai.kaizen.ui.theme.LocalThemeSettings
+import me.ankitgrai.kaizen.ui.theme.ThemeSettings
 import me.ankitgrai.kaizen.ui.theme.colorScheme
 import me.ankitgrai.kaizen.ui.theme.ThemeMode
 import me.ankitgrai.kaizen.widget.WidgetUpdater
@@ -76,15 +84,12 @@ fun SettingsScreen(
     val scope = rememberCoroutineScope()
     var showTargetDialog by remember { mutableStateOf(false) }
     var serviceOn by remember { mutableStateOf(ReelSetup.isEnabled(context)) }
+    var reelChoices by remember { mutableStateOf(ReelApps.installedChoices(context)) }
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
         serviceOn = ReelSetup.isEnabled(context)
-    }
-    val installedReelApps = remember(context) {
-        ReelApps.defaults.filter { (packageName, _) ->
-            runCatching {
-                context.packageManager.getApplicationInfo(packageName, 0)
-            }.isSuccess
-        }
+        val choices = ReelApps.installedChoices(context)
+        reelChoices = choices
+        screenTime?.pruneMissingReelApps(choices.map { it.packageName }.toSet())
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
@@ -141,19 +146,40 @@ fun SettingsScreen(
                         onOpenBattery = { ReelSetup.openBatterySettings(context) },
                     )
                 }
-                if (installedReelApps.isNotEmpty()) {
-                    installedReelApps.entries.forEachIndexed { index, (pkg, label) ->
-                        item(key = "reel-$pkg") {
+                item(key = "reel-apps-heading") {
+                    Text(
+                        text = "Count swipes in",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
+                item(key = "reel-apps-description") {
+                    Text(
+                        text = "Patched apps are included when the package name contains Instagram, YouTube, or TikTok.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = scheme.onSurfaceVariant,
+                    )
+                }
+                if (reelChoices.isEmpty()) {
+                    item(key = "reel-apps-empty") {
+                        Text(
+                            text = "No Instagram, YouTube, or TikTok apps are installed.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = scheme.onSurfaceVariant,
+                        )
+                    }
+                } else {
+                    reelChoices.forEachIndexed { index, app ->
+                        item(key = "reel-${app.packageName}") {
                             KaizenScrollItem(index = index) {
                                 ReelAppRow(
-                                    label = label,
-                                    checked = pkg in screenTime.reelApps,
+                                    label = app.label,
+                                    packageName = app.packageName,
+                                    checked = app.packageName in screenTime.reelApps,
                                     onCheckedChange = { enabled ->
-                                        val updated = if (enabled) {
-                                            screenTime.reelApps + pkg
-                                        } else {
-                                            screenTime.reelApps - pkg
-                                        }
+                                        val installed = reelChoices.map { it.packageName }.toSet()
+                                        val base = screenTime.reelApps.filter { it in installed }.toSet()
+                                        val updated = if (enabled) base + app.packageName else base - app.packageName
                                         screenTime.selectReelApps(updated)
                                     },
                                 )
@@ -408,7 +434,7 @@ private fun ReelSetupBlock(
     val scheme = MaterialTheme.colorScheme
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text(
-            text = "Kaizen counts each swipe to a new video in Instagram, YouTube, and TikTok. The counter runs while Kaizen is closed. It only hears scroll events from those apps. It does not read captions, names, or messages, and it does not block anything.",
+            text = "Kaizen counts each swipe to a new video in Instagram, YouTube, and TikTok. The counter runs while Kaizen is closed. It only hears scroll events from the apps you turn on. It does not read captions, names, or messages, and it does not block anything.",
             style = MaterialTheme.typography.bodyMedium,
             color = scheme.onSurfaceVariant,
         )
@@ -459,6 +485,7 @@ private fun ReelSetupBlock(
 @Composable
 private fun ReelAppRow(
     label: String,
+    packageName: String,
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
 ) {
@@ -466,14 +493,31 @@ private fun ReelAppRow(
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.SemiBold,
-            color = scheme.onSurface,
+        AppIcon(
+            packageName = packageName,
+            initials = label.firstOrNull()?.uppercase() ?: "?",
+            color = scheme.primary,
+            size = 40.dp,
         )
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = scheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                text = packageName,
+                style = MaterialTheme.typography.bodySmall,
+                color = scheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
         Switch(checked = checked, onCheckedChange = onCheckedChange)
     }
 }
@@ -482,4 +526,21 @@ private fun ReelAppRow(
 private fun AppThemeId.previewColor() = when (this) {
     AppThemeId.Material -> MaterialTheme.colorScheme.primary
     else -> colorScheme(dark = true).primary
+}
+
+@RequiresApi(Build.VERSION_CODES.S)
+@Preview(showBackground = true)
+@Composable
+private fun SettingsScreenPreview() {
+    val context = LocalContext.current
+    val themeSettings = remember { ThemeSettings(context) }
+    val screenTimeSettings = remember { ScreenTimeSettings(context) }
+    CompositionLocalProvider(
+        LocalThemeSettings provides themeSettings,
+        LocalScreenTimeSettings provides screenTimeSettings
+    ) {
+        KaizenTheme(dynamicColor = false) {
+            SettingsScreen(onBack = {})
+        }
+    }
 }

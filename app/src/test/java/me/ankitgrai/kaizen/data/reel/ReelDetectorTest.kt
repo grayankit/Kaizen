@@ -1,6 +1,8 @@
 package me.ankitgrai.kaizen.data.reel
 
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -68,6 +70,27 @@ class ReelDetectorTest {
                 sample(className = "com.ss.android.ugc.aweme.inbox.InboxList", deltaY = PAGE),
             ),
         )
+    }
+
+    @Test
+    fun patchedPackagesUseTheMatchingFamily() {
+        assertEquals(ReelFamily.Instagram, ReelApps.family("com.instagram.android"))
+        assertEquals(ReelFamily.Instagram, ReelApps.family("app.rvx.android.instagram"))
+        assertEquals(ReelFamily.YouTube, ReelApps.family("com.google.android.youtube"))
+        assertEquals(ReelFamily.YouTube, ReelApps.family("app.revanced.android.youtube"))
+        assertEquals(ReelFamily.YouTube, ReelApps.family("com.google.android.apps.youtube.music"))
+        assertEquals(ReelFamily.TikTok, ReelApps.family("com.zhiliaoapp.musically"))
+        assertEquals(ReelFamily.TikTok, ReelApps.family("com.zhiliaoapp.musically.go"))
+        assertEquals(ReelFamily.TikTok, ReelApps.family("com.ss.android.ugc.trill"))
+        assertEquals(ReelFamily.TikTok, ReelApps.family("app.revanced.android.tiktok"))
+        assertNull(ReelApps.family("com.example.notes"))
+        assertFalse("com.google.android.apps.youtube.music" in ReelApps.official)
+        assertTrue(ReelApps.YOUTUBE in ReelApps.official)
+
+        val detectors = ReelDetectors()
+        assertTrue(detectors.forPackage("app.revanced.android.youtube") != null)
+        assertTrue(detectors.forPackage("app.rvx.android.instagram") != null)
+        assertNull(detectors.forPackage("com.example.notes"))
     }
 
     @Test
