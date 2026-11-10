@@ -22,12 +22,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -146,40 +144,36 @@ fun SettingsScreen(
                         onOpenBattery = { ReelSetup.openBatterySettings(context) },
                     )
                 }
-                item(key = "reel-apps-heading") {
-                    Text(
-                        text = "Count swipes in",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                }
-                item(key = "reel-apps-description") {
-                    Text(
-                        text = "Patched apps are included when the package name contains Instagram, YouTube, or TikTok.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = scheme.onSurfaceVariant,
-                    )
-                }
                 if (reelChoices.isEmpty()) {
                     item(key = "reel-apps-empty") {
                         Text(
-                            text = "No Instagram, YouTube, or TikTok apps are installed.",
+                            text = "No reel apps installed.",
                             style = MaterialTheme.typography.bodyMedium,
                             color = scheme.onSurfaceVariant,
                         )
                     }
                 } else {
+                    val sharedLabels = reelChoices
+                        .groupingBy { it.label }
+                        .eachCount()
+                        .filterValues { it > 1 }
+                        .keys
                     reelChoices.forEachIndexed { index, app ->
                         item(key = "reel-${app.packageName}") {
                             KaizenScrollItem(index = index) {
                                 ReelAppRow(
                                     label = app.label,
                                     packageName = app.packageName,
+                                    showPackage = app.label in sharedLabels,
                                     checked = app.packageName in screenTime.reelApps,
                                     onCheckedChange = { enabled ->
                                         val installed = reelChoices.map { it.packageName }.toSet()
                                         val base = screenTime.reelApps.filter { it in installed }.toSet()
-                                        val updated = if (enabled) base + app.packageName else base - app.packageName
+                                        val updated = if (enabled) {
+                                            base + app.packageName
+                                        } else {
+                                            base - app.packageName
+                                        }
                                         screenTime.selectReelApps(updated)
                                     },
                                 )
@@ -432,53 +426,69 @@ private fun ReelSetupBlock(
     onOpenBattery: () -> Unit,
 ) {
     val scheme = MaterialTheme.colorScheme
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text(
-            text = "Kaizen counts each swipe to a new video in Instagram, YouTube, and TikTok. The counter runs while Kaizen is closed. It only hears scroll events from the apps you turn on. It does not read captions, names, or messages, and it does not block anything.",
+            text = "Counts swipes while Kaizen is closed. It does not read what is on screen.",
             style = MaterialTheme.typography.bodyMedium,
             color = scheme.onSurfaceVariant,
         )
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = "Accessibility service",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                )
-                Text(
-                    text = if (serviceOn) "On" else "Off",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = if (serviceOn) scheme.primary else scheme.onSurfaceVariant,
-                    fontWeight = FontWeight.SemiBold,
-                )
-            }
-        }
-        Text(
-            text = "Android hides the accessibility switch until you allow restricted settings. Open Apps, Kaizen, menu, Allow restricted settings, then enable the service.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = scheme.onSurfaceVariant,
-        )
-        Button(
+        SettingsLinkRow(
+            title = "Accessibility service",
+            subtitle = if (serviceOn) {
+                "On"
+            } else {
+                "Off. Allow restricted settings: Apps, Kaizen, menu, then enable the service."
+            },
+            action = "Open",
             onClick = onOpenAccessibility,
-            modifier = Modifier.fillMaxWidth(),
+        )
+        SettingsLinkRow(
+            title = "Battery",
+            subtitle = "Set use to Unrestricted",
+            action = "Open",
+            onClick = onOpenBattery,
+        )
+    }
+}
+
+@Composable
+private fun SettingsLinkRow(
+    title: String,
+    subtitle: String,
+    action: String,
+    onClick: () -> Unit,
+) {
+    val scheme = MaterialTheme.colorScheme
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .roundedClickable(RoundedCornerShape(16.dp), onClick = onClick)
+            .background(scheme.surfaceVariant)
+            .padding(14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
-            Text("Open accessibility settings")
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.bodyMedium,
+                color = scheme.onSurfaceVariant,
+            )
         }
         Text(
-            text = "Samsung stops counting unless battery use is Unrestricted. If this opens app info, tap Battery, then Unrestricted.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = scheme.onSurfaceVariant,
+            text = action,
+            modifier = Modifier.padding(start = 12.dp),
+            color = scheme.primary,
+            fontWeight = FontWeight.SemiBold,
         )
-        OutlinedButton(
-            onClick = onOpenBattery,
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Text("Open battery settings")
-        }
     }
 }
 
@@ -486,6 +496,7 @@ private fun ReelSetupBlock(
 private fun ReelAppRow(
     label: String,
     packageName: String,
+    showPackage: Boolean,
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
 ) {
@@ -510,13 +521,15 @@ private fun ReelAppRow(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            Text(
-                text = packageName,
-                style = MaterialTheme.typography.bodySmall,
-                color = scheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
+            if (showPackage) {
+                Text(
+                    text = packageName,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = scheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
         }
         Switch(checked = checked, onCheckedChange = onCheckedChange)
     }
