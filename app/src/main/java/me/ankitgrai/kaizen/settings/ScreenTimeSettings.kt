@@ -21,11 +21,7 @@ class ScreenTimeSettings(context: Context) {
         private set
 
     var reelApps by mutableStateOf(
-        prefs.getString(KEY_REEL_APPS, null)
-            ?.split(",")
-            ?.filter { it.isNotBlank() }
-            ?.toSet()
-            ?: ReelApps.defaults.keys
+        parseReelApps(prefs.getString(KEY_REEL_APPS, null))
     )
         private set
 
@@ -39,8 +35,9 @@ class ScreenTimeSettings(context: Context) {
     }
 
     fun selectReelApps(apps: Set<String>) {
-        reelApps = apps
-        prefs.edit { putString(KEY_REEL_APPS, apps.joinToString(",")) }
+        val known = apps.filter { it in ReelApps.packages }.toSet()
+        reelApps = known
+        prefs.edit { putString(KEY_REEL_APPS, known.joinToString(",")) }
     }
 
     companion object {
@@ -61,6 +58,21 @@ class ScreenTimeSettings(context: Context) {
                 .getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
                 .getInt(KEY_TARGET_MINUTES, DEFAULT_TARGET_MINUTES)
             return snapTargetMinutes(minutes) * 60_000L
+        }
+
+        fun readReelApps(context: Context): Set<String> {
+            val stored = context.applicationContext
+                .getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                .getString(KEY_REEL_APPS, null)
+            return parseReelApps(stored)
+        }
+
+        private fun parseReelApps(stored: String?): Set<String> {
+            if (stored == null) return ReelApps.packages
+            return stored.split(",")
+                .map { it.trim() }
+                .filter { it in ReelApps.packages }
+                .toSet()
         }
     }
 }

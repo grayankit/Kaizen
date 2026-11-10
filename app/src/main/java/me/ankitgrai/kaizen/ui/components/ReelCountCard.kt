@@ -31,6 +31,7 @@ import me.ankitgrai.kaizen.ui.theme.chartSurfaceColor
 @Composable
 fun ReelCountCard(
     count: Int,
+    countingEnabled: Boolean,
     onSeeHistory: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -69,6 +70,15 @@ fun ReelCountCard(
                 color = MaterialTheme.colorScheme.primary,
                 letterSpacing = (-1).sp,
             )
+
+            if (!countingEnabled) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "Counting is off until the service is enabled.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
 
             Spacer(modifier = Modifier.height(8.dp))
 

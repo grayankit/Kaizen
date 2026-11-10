@@ -43,6 +43,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLocale
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -54,6 +55,7 @@ import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.launch
+import me.ankitgrai.kaizen.data.reel.ReelSetup
 import me.ankitgrai.kaizen.data.usage.DailyDeviceUsage
 import me.ankitgrai.kaizen.settings.LocalScreenTimeSettings
 import me.ankitgrai.kaizen.settings.ScreenTimeSettings
@@ -89,13 +91,16 @@ fun OverviewScreen(
     val isRefreshing by usageViewModel.isRefreshing.collectAsStateWithLifecycle()
     val reelCountToday by usageViewModel.reelCountToday.collectAsStateWithLifecycle()
 
+    val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var selectedDate by remember { mutableStateOf(LocalDate.now()) }
+    var countingEnabled by remember { mutableStateOf(ReelSetup.isEnabled(context)) }
     val targetUsageMillis = LocalScreenTimeSettings.current?.targetMillis
         ?: (ScreenTimeSettings.DEFAULT_TARGET_MINUTES * 60_000L)
     val reelApps = LocalScreenTimeSettings.current?.reelApps ?: emptySet()
 
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
+        countingEnabled = ReelSetup.isEnabled(context)
         usageViewModel.refresh()
         usageViewModel.refreshHistory()
         usageViewModel.refreshReel(reelApps)
@@ -112,6 +117,7 @@ fun OverviewScreen(
         isRefreshing = isRefreshing,
         selectedDate = selectedDate,
         reelCountToday = reelCountToday,
+        countingEnabled = countingEnabled,
         onDateSelected = { selectedDate = it },
         onRefreshAll = { scope.launch { usageViewModel.refreshAll() } },
         onGrantAccess = { usageViewModel.openUsageAccessSettings() },
@@ -132,6 +138,7 @@ fun OverviewContent(
     isRefreshing: Boolean,
     selectedDate: LocalDate,
     reelCountToday: Int = 0,
+    countingEnabled: Boolean = false,
     onDateSelected: (LocalDate) -> Unit,
     onRefreshAll: () -> Unit,
     onGrantAccess: () -> Unit,
@@ -199,6 +206,7 @@ fun OverviewContent(
 
             ReelCountCard(
                 count = reelCountToday,
+                countingEnabled = countingEnabled,
                 onSeeHistory = onSeeReelHistory,
             )
 

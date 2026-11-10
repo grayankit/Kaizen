@@ -20,10 +20,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -45,8 +47,11 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import kotlinx.coroutines.launch
 import me.ankitgrai.kaizen.data.reel.ReelApps
+import me.ankitgrai.kaizen.data.reel.ReelSetup
 import me.ankitgrai.kaizen.settings.LocalScreenTimeSettings
 import me.ankitgrai.kaizen.settings.ScreenTimeSettings
 import me.ankitgrai.kaizen.settings.formatScreenTimeTarget
@@ -70,6 +75,10 @@ fun SettingsScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var showTargetDialog by remember { mutableStateOf(false) }
+    var serviceOn by remember { mutableStateOf(ReelSetup.isEnabled(context)) }
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
+        serviceOn = ReelSetup.isEnabled(context)
+    }
     val installedReelApps = remember(context) {
         ReelApps.defaults.filter { (packageName, _) ->
             runCatching {
@@ -118,21 +127,21 @@ fun SettingsScreen(
                     }
                 }
 
+                item(key = "reel-heading") {
+                    Text(
+                        text = "Reel counter",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
+                item(key = "reel-setup") {
+                    ReelSetupBlock(
+                        serviceOn = serviceOn,
+                        onOpenAccessibility = { ReelSetup.openAccessibilitySettings(context) },
+                        onOpenBattery = { ReelSetup.openBatterySettings(context) },
+                    )
+                }
                 if (installedReelApps.isNotEmpty()) {
-                    item(key = "reel-heading") {
-                        Text(
-                            text = "Reel counter",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.SemiBold,
-                        )
-                    }
-                    item(key = "reel-description") {
-                        Text(
-                            text = "Track how many reels you watch in these apps.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = scheme.onSurfaceVariant,
-                        )
-                    }
                     installedReelApps.entries.forEachIndexed { index, (pkg, label) ->
                         item(key = "reel-$pkg") {
                             KaizenScrollItem(index = index) {
@@ -388,6 +397,63 @@ private fun ScreenTimeTargetDialog(
             }
         }
     )
+}
+
+@Composable
+private fun ReelSetupBlock(
+    serviceOn: Boolean,
+    onOpenAccessibility: () -> Unit,
+    onOpenBattery: () -> Unit,
+) {
+    val scheme = MaterialTheme.colorScheme
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Text(
+            text = "Kaizen counts each swipe to a new video in Instagram, YouTube, and TikTok. The counter runs while Kaizen is closed. It only hears scroll events from those apps. It does not read captions, names, or messages, and it does not block anything.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = scheme.onSurfaceVariant,
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Accessibility service",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Text(
+                    text = if (serviceOn) "On" else "Off",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = if (serviceOn) scheme.primary else scheme.onSurfaceVariant,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            }
+        }
+        Text(
+            text = "Android hides the accessibility switch until you allow restricted settings. Open Apps, Kaizen, menu, Allow restricted settings, then enable the service.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = scheme.onSurfaceVariant,
+        )
+        Button(
+            onClick = onOpenAccessibility,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text("Open accessibility settings")
+        }
+        Text(
+            text = "Samsung stops counting unless battery use is Unrestricted. If this opens app info, tap Battery, then Unrestricted.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = scheme.onSurfaceVariant,
+        )
+        OutlinedButton(
+            onClick = onOpenBattery,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text("Open battery settings")
+        }
+    }
 }
 
 @Composable

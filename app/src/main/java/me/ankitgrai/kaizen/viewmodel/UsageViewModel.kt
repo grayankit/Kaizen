@@ -100,7 +100,6 @@ class UsageViewModel(
     private suspend fun refreshReelNow() {
         val enabledApps = enabledReelApps
         runCatching {
-            reelRepository.refresh(enabledApps)
             _reelCountToday.value = reelRepository.todayTotal(enabledApps)
             _reelHistory.value = reelRepository.last7Days(enabledApps)
         }

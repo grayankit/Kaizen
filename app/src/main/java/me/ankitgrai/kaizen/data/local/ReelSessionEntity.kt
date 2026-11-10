@@ -6,5 +6,5 @@ import androidx.room.Entity
 data class ReelSessionEntity(
     val date: String,
     val packageName: String,
-    val resumeCount: Int,
+    val swipeCount: Int,
 )

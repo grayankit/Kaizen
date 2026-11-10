@@ -9,6 +9,14 @@ interface ReelDao {
     @Upsert
     suspend fun upsert(rows: List<ReelSessionEntity>)
 
+    @Query(
+        """
+        SELECT swipeCount FROM reel_sessions
+        WHERE date = :date AND packageName = :packageName
+        """
+    )
+    suspend fun swipeCount(date: String, packageName: String): Int?
+
     @Query("SELECT * FROM reel_sessions WHERE date = :date")
     suspend fun forDate(date: String): List<ReelSessionEntity>
 

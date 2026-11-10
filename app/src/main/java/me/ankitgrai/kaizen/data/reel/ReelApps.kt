@@ -1,12 +1,19 @@
 package me.ankitgrai.kaizen.data.reel
 
 object ReelApps {
+    const val INSTAGRAM = "com.instagram.android"
+    const val YOUTUBE = "com.google.android.youtube"
+    const val TIKTOK = "com.zhiliaoapp.musically"
+    const val TIKTOK_LITE = "com.ss.android.ugc.trill"
+
     val defaults: Map<String, String> = mapOf(
-        "com.instagram.android" to "Instagram",
-        "com.google.android.youtube" to "YouTube",
-        "com.zhiliaoapp.musically" to "TikTok",
-        "com.ss.android.ugc.trill" to "TikTok",
-        "com.snapchat.android" to "Snapchat",
-        "com.facebook.katana" to "Facebook",
+        INSTAGRAM to "Instagram",
+        YOUTUBE to "YouTube",
+        TIKTOK to "TikTok",
+        TIKTOK_LITE to "TikTok",
     )
+
+    val packages: Set<String> = defaults.keys
 }
+
+// Keep res/xml/reel_accessibility_service.xml packageNames in sync with ReelApps.packages.

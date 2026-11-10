@@ -3,27 +3,28 @@ package me.ankitgrai.kaizen.data.reel
 import android.content.Context
 import java.time.LocalDate
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import me.ankitgrai.kaizen.data.local.KaizenDatabase
 import me.ankitgrai.kaizen.data.local.ReelSessionEntity
 
 class ReelRepository(context: Context) {
     private val dao = KaizenDatabase.get(context).reelDao()
-    private val counter = ReelCounter(context)
+    private val writes = Mutex()
 
-    suspend fun refresh(enabledApps: Set<String>) = withContext(Dispatchers.IO) {
-        if (enabledApps.isEmpty()) return@withContext
-        val today = LocalDate.now().toString()
-        val counts = counter.countToday(enabledApps)
-        dao.upsert(counts.map { (pkg, count) ->
-            ReelSessionEntity(date = today, packageName = pkg, resumeCount = count)
-        })
+    suspend fun recordSwipe(packageName: String) = withContext(Dispatchers.IO) {
+        val date = LocalDate.now().toString()
+        writes.withLock {
+            val next = (dao.swipeCount(date, packageName) ?: 0) + 1
+            dao.upsert(listOf(ReelSessionEntity(date, packageName, next)))
+        }
     }
 
     suspend fun todayTotal(enabledApps: Set<String>): Int = withContext(Dispatchers.IO) {
         dao.forDate(LocalDate.now().toString())
             .filter { it.packageName in enabledApps }
-            .sumOf { it.resumeCount }
+            .sumOf { it.swipeCount }
     }
 
     suspend fun last7Days(enabledApps: Set<String>): List<DailyReelCount> =
@@ -36,7 +37,7 @@ class ReelRepository(context: Context) {
                 .map { (date, rows) ->
                     DailyReelCount(
                         date = LocalDate.parse(date),
-                        count = rows.sumOf { it.resumeCount },
+                        count = rows.sumOf { it.swipeCount },
                     )
                 }
                 .sortedBy { it.date }

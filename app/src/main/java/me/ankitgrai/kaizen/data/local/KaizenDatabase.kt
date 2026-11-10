@@ -14,7 +14,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         HourlyDeviceUsageEntity::class,
         ReelSessionEntity::class,
     ],
-    version = 3,
+    version = 4,
     exportSchema = false
 )
 abstract class KaizenDatabase : RoomDatabase() {
@@ -31,7 +31,7 @@ abstract class KaizenDatabase : RoomDatabase() {
                     context.applicationContext,
                     KaizenDatabase::class.java,
                     "kaizen.db"
-                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
                     .build()
                     .also { instance = it }
             }
@@ -62,6 +62,22 @@ private val MIGRATION_2_3 = object : Migration(2, 3) {
                 `date` TEXT NOT NULL,
                 `packageName` TEXT NOT NULL,
                 `resumeCount` INTEGER NOT NULL,
+                PRIMARY KEY(`date`, `packageName`)
+            )
+            """.trimIndent()
+        )
+    }
+}
+
+private val MIGRATION_3_4 = object : Migration(3, 4) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("DROP TABLE IF EXISTS `reel_sessions`")
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS `reel_sessions` (
+                `date` TEXT NOT NULL,
+                `packageName` TEXT NOT NULL,
+                `swipeCount` INTEGER NOT NULL,
                 PRIMARY KEY(`date`, `packageName`)
             )
             """.trimIndent()
