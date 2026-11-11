@@ -10,10 +10,11 @@ import androidx.compose.runtime.setValue
 import androidx.core.content.edit
 import kotlin.math.roundToInt
 import me.ankitgrai.kaizen.data.reel.ReelApps
+import me.ankitgrai.kaizen.widget.WidgetUpdater
 
 class ScreenTimeSettings(context: Context) {
-    private val prefs = context.applicationContext
-        .getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    private val appContext = context.applicationContext
+    private val prefs = appContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
     var targetMinutes by mutableIntStateOf(
         prefs.getInt(KEY_TARGET_MINUTES, DEFAULT_TARGET_MINUTES)
@@ -38,6 +39,7 @@ class ScreenTimeSettings(context: Context) {
     fun selectReelApps(apps: Set<String>) {
         reelApps = apps
         prefs.edit { putString(KEY_REEL_APPS, apps.joinToString(",")) }
+        WidgetUpdater.publishReel(appContext)
     }
 
     fun pruneMissingReelApps(installed: Set<String>) {

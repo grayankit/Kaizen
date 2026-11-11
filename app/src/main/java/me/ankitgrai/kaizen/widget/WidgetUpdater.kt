@@ -14,14 +14,18 @@ import androidx.work.WorkerParameters
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import me.ankitgrai.kaizen.data.usage.UsageRepository
+import kotlin.time.Duration.Companion.milliseconds
 
 object WidgetUpdater {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     @Volatile
     private var lastPublishAt = 0L
+    private var reelPublish: Job? = null
 
     fun publish(context: Context) {
         val appContext = context.applicationContext
@@ -33,6 +37,16 @@ object WidgetUpdater {
         scope.launch { update(appContext) }
     }
 
+    fun publishReel(context: Context) {
+        val appContext = context.applicationContext
+        if (!hasReelWidget(appContext)) return
+        reelPublish?.cancel()
+        reelPublish = scope.launch {
+            delay(REEL_PUBLISH_DELAY_MS.milliseconds)
+            runCatching { ReelCountWidget().updateAll(appContext) }
+        }
+    }
+
     suspend fun update(context: Context) {
         val appContext = context.applicationContext
         if (!hasWidgets(appContext)) {
@@ -40,6 +54,9 @@ object WidgetUpdater {
             return
         }
         ScreenTimeWidget().updateAll(appContext)
+        if (hasReelWidget(appContext)) {
+            ReelCountWidget().updateAll(appContext)
+        }
     }
 
     fun refreshSoon(context: Context) {
@@ -60,6 +77,12 @@ object WidgetUpdater {
         workManager.cancelUniqueWork(PERIODIC_WORK)
     }
 
+    fun cancelRefreshIfUnused(context: Context) {
+        if (!hasWidgets(context.applicationContext)) {
+            cancelRefresh(context)
+        }
+    }
+
     private fun ensureScheduled(context: Context) {
         val request = PeriodicWorkRequestBuilder<WidgetRefreshWorker>(
             30,
@@ -72,15 +95,27 @@ object WidgetUpdater {
         )
     }
 
-    private fun hasWidgets(context: Context): Boolean {
+    internal fun hasWidgets(context: Context): Boolean {
+        return hasScreenTimeWidget(context) || hasReelWidget(context)
+    }
+
+    private fun hasScreenTimeWidget(context: Context): Boolean {
+        return widgetIds(context, ScreenTimeWidgetReceiver::class.java).isNotEmpty()
+    }
+
+    private fun hasReelWidget(context: Context): Boolean {
+        return widgetIds(context, ReelCountWidgetReceiver::class.java).isNotEmpty()
+    }
+
+    private fun widgetIds(context: Context, receiver: Class<*>): IntArray {
         val manager = AppWidgetManager.getInstance(context)
-        val component = ComponentName(context, ScreenTimeWidgetReceiver::class.java)
-        return manager.getAppWidgetIds(component).isNotEmpty()
+        return manager.getAppWidgetIds(ComponentName(context, receiver))
     }
 
     private const val ONCE_WORK = "kaizen.widget.refresh.once"
     private const val PERIODIC_WORK = "kaizen.widget.refresh.periodic"
     private const val PUBLISH_DEBOUNCE_MS = 2_000L
+    private const val REEL_PUBLISH_DELAY_MS = 300L
 }
 
 class WidgetRefreshWorker(
@@ -88,7 +123,7 @@ class WidgetRefreshWorker(
     params: WorkerParameters
 ) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result {
-        if (!widgetStillPlaced(applicationContext)) {
+        if (!WidgetUpdater.hasWidgets(applicationContext)) {
             WidgetUpdater.cancelRefresh(applicationContext)
             return Result.success()
         }
@@ -101,10 +136,4 @@ class WidgetRefreshWorker(
         WidgetUpdater.update(applicationContext)
         return Result.success()
     }
-}
-
-private fun widgetStillPlaced(context: Context): Boolean {
-    val manager = AppWidgetManager.getInstance(context)
-    val component = ComponentName(context, ScreenTimeWidgetReceiver::class.java)
-    return manager.getAppWidgetIds(component).isNotEmpty()
 }

@@ -15,7 +15,7 @@ class ScreenTimeWidgetReceiver : GlanceAppWidgetReceiver() {
 
     override fun onDisabled(context: Context) {
         super.onDisabled(context)
-        WidgetUpdater.cancelRefresh(context)
+        WidgetUpdater.cancelRefreshIfUnused(context)
     }
 
     override fun onUpdate(

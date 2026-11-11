@@ -4,6 +4,10 @@
     <string name="widget_screen_time_description">Today\'s screen time against your daily target</string>
     <string name="widget_grant_access">Grant usage access</string>
     <string name="widget_open_app">Tap to open Kaizen</string>
+    <string name="widget_reel_count">Reels</string>
+    <string name="widget_reel_count_description">Today\'s reel and short swipes</string>
+    <string name="widget_reels_today">Reels today</string>
+    <string name="widget_counting_off">Counting is off</string>
     <string name="reel_accessibility_label">Reel counter</string>
     <string name="reel_accessibility_description">Counts each swipe to a new video in Instagram, YouTube, and TikTok. Does not read captions, names, or messages, and does not block anything.</string>
 </resources>

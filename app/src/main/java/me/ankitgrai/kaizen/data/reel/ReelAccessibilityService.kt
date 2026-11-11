@@ -13,6 +13,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import me.ankitgrai.kaizen.settings.ScreenTimeSettings
+import me.ankitgrai.kaizen.widget.WidgetUpdater
 
 class ReelAccessibilityService : AccessibilityService() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO.limitedParallelism(1))
@@ -28,6 +29,7 @@ class ReelAccessibilityService : AccessibilityService() {
                 applyPackageFilter()
             }
         }
+        WidgetUpdater.publishReel(this)
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
@@ -54,6 +56,7 @@ class ReelAccessibilityService : AccessibilityService() {
             runCatching {
                 if (packageName in ScreenTimeSettings.readReelApps(applicationContext)) {
                     repository.recordSwipe(packageName)
+                    WidgetUpdater.publishReel(applicationContext)
                 }
             }.onFailure { error ->
                 Log.w(TAG, "Could not save a reel swipe", error)
@@ -66,6 +69,7 @@ class ReelAccessibilityService : AccessibilityService() {
     override fun onDestroy() {
         appsListener?.let { ScreenTimeSettings.unregisterReelAppsListener(this, it) }
         appsListener = null
+        WidgetUpdater.publishReel(this)
         scope.cancel()
         super.onDestroy()
     }
