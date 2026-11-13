@@ -3,7 +3,8 @@ package me.ankitgrai.kaizen.widget
 import android.appwidget.AppWidgetManager
 import android.content.ComponentName
 import android.content.Context
-import androidx.glance.appwidget.updateAll
+import androidx.glance.appwidget.GlanceAppWidget
+import androidx.glance.appwidget.GlanceAppWidgetManager
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.ExistingWorkPolicy
@@ -43,7 +44,13 @@ object WidgetUpdater {
         reelPublish?.cancel()
         reelPublish = scope.launch {
             delay(REEL_PUBLISH_DELAY_MS.milliseconds)
-            runCatching { ReelCountWidget().updateAll(appContext) }
+            runCatching {
+                updatePlaced(
+                    appContext,
+                    ReelCountWidget(),
+                    ReelCountWidgetReceiver::class.java,
+                )
+            }
         }
     }
 
@@ -53,9 +60,23 @@ object WidgetUpdater {
             cancelRefresh(appContext)
             return
         }
-        ScreenTimeWidget().updateAll(appContext)
-        if (hasReelWidget(appContext)) {
-            ReelCountWidget().updateAll(appContext)
+        updatePlaced(appContext, ScreenTimeWidget(), ScreenTimeWidgetReceiver::class.java)
+        updatePlaced(appContext, ReelCountWidget(), ReelCountWidgetReceiver::class.java)
+    }
+
+    // Update by the receiver's widget ids, not GlanceAppWidget.updateAll.
+    // updateAll looks widgets up by class name, which painted both widgets
+    // when R8 merged the two GlanceAppWidget subclasses.
+    private suspend fun updatePlaced(
+        context: Context,
+        widget: GlanceAppWidget,
+        receiver: Class<*>,
+    ) {
+        val ids = widgetIds(context, receiver)
+        if (ids.isEmpty()) return
+        val manager = GlanceAppWidgetManager(context)
+        ids.forEach { id ->
+            widget.update(context, manager.getGlanceIdBy(id))
         }
     }
 

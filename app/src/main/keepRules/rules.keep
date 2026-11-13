@@ -4,9 +4,10 @@
 # For more details, see
 #   https://d.android.com/r/tools/r8/keep-rules
 
-# If your project uses WebView with JS, uncomment the following
-# and specify the fully qualified class name to the JavaScript interface
-# class:
-#-keepclassmembers class fqcn.of.javascript.interface.for.webview {
-#   public *;
-#}
+# Glance identifies a widget by its class name. R8 class merging collapsed
+# ScreenTimeWidget and ReelCountWidget into one class, so an update of either
+# painted both home-screen widgets.
+-keep class me.ankitgrai.kaizen.widget.ScreenTimeWidget
+-keep class me.ankitgrai.kaizen.widget.ReelCountWidget
+-keep class me.ankitgrai.kaizen.widget.ScreenTimeWidgetReceiver
+-keep class me.ankitgrai.kaizen.widget.ReelCountWidgetReceiver
