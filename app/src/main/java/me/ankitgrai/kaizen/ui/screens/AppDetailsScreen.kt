@@ -1,7 +1,9 @@
 package me.ankitgrai.kaizen.ui.screens
 
 import android.content.Intent
+import android.os.Build
 import android.provider.Settings
+import androidx.annotation.RequiresApi
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -336,6 +338,7 @@ private fun formatDuration(milliseconds: Long): String {
     }
 }
 
+@RequiresApi(Build.VERSION_CODES.S)
 @Preview(showBackground = true)
 @Composable
 private fun AppDetailsScreenPreview() {
