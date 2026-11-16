@@ -53,13 +53,11 @@ internal class PageSwipeTracker(
     private fun isSideways(sample: ScrollSample): Boolean {
         val dx = sample.scrollDeltaX
         val dy = sample.scrollDeltaY
-        if (dx == UNDEFINED || dy == UNDEFINED) return false
-        return abs(dx) > abs(dy) && abs(dx) > 8
+        return !(dx == UNDEFINED || dy == UNDEFINED) && abs(dx) > abs(dy) && abs(dx) > 8
     }
 
     private fun indexMoved(sample: ScrollSample): Boolean {
-        if (sample.fromIndex < 0 || sample.toIndex < 0) return false
-        return sample.fromIndex != sample.toIndex
+        return !(sample.fromIndex < 0 || sample.toIndex < 0) && sample.fromIndex != sample.toIndex
     }
 
     private companion object {

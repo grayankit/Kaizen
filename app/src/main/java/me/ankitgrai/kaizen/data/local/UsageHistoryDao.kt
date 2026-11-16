@@ -35,12 +35,17 @@ interface UsageHistoryDao {
 
     @Query(
         """
-        SELECT * FROM daily_app_usage
-        WHERE date = :date
+        SELECT packageName, SUM(totalUsageMillis) AS totalUsageMillis
+        FROM daily_app_usage
+        WHERE date >= :start AND date <= :end
+        GROUP BY packageName
         ORDER BY totalUsageMillis DESC
         """
     )
-    suspend fun appsOnDate(date: String): List<DailyAppUsageEntity>
+    suspend fun appUsageTotalsBetween(
+        start: String,
+        end: String
+    ): List<AppUsageTotal>
 
     @Query(
         """
@@ -58,3 +63,8 @@ interface UsageHistoryDao {
     @Upsert
     suspend fun upsertAppDays(days: List<DailyAppUsageEntity>)
 }
+
+data class AppUsageTotal(
+    val packageName: String,
+    val totalUsageMillis: Long
+)

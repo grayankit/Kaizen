@@ -124,9 +124,16 @@ class UsageRepository (context: Context){
     }
 
     suspend fun getTopAppsForDate(date: LocalDate): List<AppUsageInfo> {
+        return getTopAppsBetween(date, date)
+    }
+
+    suspend fun getTopAppsBetween(
+        start: LocalDate,
+        end: LocalDate
+    ): List<AppUsageInfo> {
         return withContext(Dispatchers.IO) {
             val installed = getInstalledApps().map { it.packageName }.toSet()
-            historyDao.appsOnDate(date.toString())
+            historyDao.appUsageTotalsBetween(start.toString(), end.toString())
                 .filter {
                     it.totalUsageMillis > 0L &&
                         it.packageName in installed &&

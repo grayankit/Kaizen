@@ -40,6 +40,13 @@ data class DayAppsUiState(
     val apps: List<AppUsage> = emptyList()
 )
 
+data class PeriodAppsUiState(
+    val startDate: LocalDate? = null,
+    val endDate: LocalDate? = null,
+    val isLoading: Boolean = false,
+    val apps: List<AppUsage> = emptyList()
+)
+
 data class HistoryUiState(
     val isLoading: Boolean = false,
     val days: List<DailyDeviceUsage> = emptyList(),
@@ -65,6 +72,9 @@ class UsageViewModel(
 
     private val _dayAppsState = MutableStateFlow(DayAppsUiState())
     val dayAppsState: StateFlow<DayAppsUiState> = _dayAppsState.asStateFlow()
+
+    private val _periodAppsState = MutableStateFlow(PeriodAppsUiState())
+    val periodAppsState: StateFlow<PeriodAppsUiState> = _periodAppsState.asStateFlow()
 
     private val _historyState = MutableStateFlow(HistoryUiState())
 
@@ -117,7 +127,7 @@ class UsageViewModel(
                     hours = hours,
                     available = hours.isNotEmpty()
                 )
-            } catch (exception: Exception) {
+            } catch (_: Exception) {
                 if (_dayHoursState.value.date != date) return@launch
                 _dayHoursState.value = DayHoursUiState(
                     date = date,
@@ -325,8 +335,48 @@ class UsageViewModel(
                         .sortedByDescending { it.totalUsageMillis }
                         .take(limit)
                 )
-            } catch (exception: Exception) {
+            } catch (_: Exception) {
                 _dayAppsState.value = DayAppsUiState(date = date)
+            }
+        }
+    }
+
+    fun loadMostUsedForPeriod(
+        startDate: LocalDate,
+        endDate: LocalDate,
+        limit: Int = 5
+    ) {
+        viewModelScope.launch {
+            _periodAppsState.value = PeriodAppsUiState(
+                startDate = startDate,
+                endDate = endDate,
+                isLoading = true
+            )
+            try {
+                val apps = repository.getTopAppsBetween(startDate, endDate)
+                val total = apps.sumOf { it.totalTimeInForeground }.coerceAtLeast(1L)
+                if (
+                    _periodAppsState.value.startDate != startDate ||
+                    _periodAppsState.value.endDate != endDate
+                ) return@launch
+                _periodAppsState.value = PeriodAppsUiState(
+                    startDate = startDate,
+                    endDate = endDate,
+                    apps = apps
+                        .map { it.toAppUsage(total) }
+                        .sortedByDescending { it.totalUsageMillis }
+                        .take(limit)
+                )
+            } catch (_: Exception) {
+                if (
+                    _periodAppsState.value.startDate == startDate &&
+                    _periodAppsState.value.endDate == endDate
+                ) {
+                    _periodAppsState.value = PeriodAppsUiState(
+                        startDate = startDate,
+                        endDate = endDate
+                    )
+                }
             }
         }
     }

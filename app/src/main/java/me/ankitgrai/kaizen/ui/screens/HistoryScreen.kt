@@ -1,5 +1,7 @@
 package me.ankitgrai.kaizen.ui.screens
 
+import android.os.Build
+import androidx.annotation.RequiresApi
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -46,6 +48,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import me.ankitgrai.kaizen.data.usage.DailyDeviceUsage
 import me.ankitgrai.kaizen.data.usage.HourlyDeviceUsage
+import me.ankitgrai.kaizen.ui.components.AppUsageRow
 import me.ankitgrai.kaizen.ui.components.PeriodSelector
 import me.ankitgrai.kaizen.ui.components.roundedClickable
 import me.ankitgrai.kaizen.ui.components.UsagePeriod
@@ -61,6 +64,7 @@ import me.ankitgrai.kaizen.ui.components.KaizenPullToRefresh
 import me.ankitgrai.kaizen.ui.theme.chartSurfaceColor
 import me.ankitgrai.kaizen.viewmodel.DayHoursUiState
 import me.ankitgrai.kaizen.viewmodel.HistoryUiState
+import me.ankitgrai.kaizen.viewmodel.PeriodAppsUiState
 
 
 
@@ -70,6 +74,7 @@ fun HistoryScreen(
 ) {
     val historyState by usageViewModel.historyState.collectAsState()
     val dayHoursState by usageViewModel.dayHoursState.collectAsState()
+    val periodAppsState by usageViewModel.periodAppsState.collectAsState()
     val isRefreshing by usageViewModel.isRefreshing.collectAsState()
     val scope = rememberCoroutineScope()
 
@@ -80,9 +85,11 @@ fun HistoryScreen(
     HistoryContent(
         historyState = historyState,
         dayHoursState = dayHoursState,
+        periodAppsState = periodAppsState,
         isRefreshing = isRefreshing,
         onRefresh = { scope.launch { usageViewModel.refreshAll() } },
-        onLoadDayHours = usageViewModel::loadDayHours
+        onLoadDayHours = usageViewModel::loadDayHours,
+        onLoadMostUsedForPeriod = usageViewModel::loadMostUsedForPeriod
     )
 }
 
@@ -90,9 +97,11 @@ fun HistoryScreen(
 fun HistoryContent(
     historyState: HistoryUiState,
     dayHoursState: DayHoursUiState = DayHoursUiState(),
+    periodAppsState: PeriodAppsUiState = PeriodAppsUiState(),
     isRefreshing: Boolean = false,
     onRefresh: () -> Unit = {},
-    onLoadDayHours: (LocalDate) -> Unit = {}
+    onLoadDayHours: (LocalDate) -> Unit = {},
+    onLoadMostUsedForPeriod: (LocalDate, LocalDate) -> Unit = { _, _ -> }
 ) {
     val today = LocalDate.now()
 
@@ -159,6 +168,16 @@ fun HistoryContent(
             recorded = false
         )
     }
+
+    val periodStart = chartDays.first().date
+    val periodEnd = chartDays.last().date.coerceAtMost(today)
+
+    LaunchedEffect(periodStart, periodEnd) {
+        onLoadMostUsedForPeriod(periodStart, periodEnd)
+    }
+
+    val periodAppsReady = periodAppsState.startDate == periodStart &&
+        periodAppsState.endDate == periodEnd
 
     val selectedDay = chartDays.firstOrNull {
         it.date == selectedDate
@@ -288,7 +307,7 @@ fun HistoryContent(
                         "Fetching device usage"
 
                     historyState.error != null ->
-                        historyState.error.orEmpty()
+                        historyState.error
 
                     recordedDays.isEmpty() ->
                         "No recorded usage available for this period"
@@ -397,7 +416,7 @@ fun HistoryContent(
                 historyState.error != null -> {
                     Text(
                         text = "Couldn't load your usage history.\n" +
-                                historyState.error.orEmpty(),
+                                historyState.error,
                         color = MaterialTheme.colorScheme.error
                     )
                 }
@@ -491,6 +510,57 @@ fun HistoryContent(
                             )
                         }
                     }
+                }
+            }
+        }
+
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(20.dp))
+                .background(chartSurfaceColor())
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Text(
+                text = "Most used apps",
+                color = MaterialTheme.colorScheme.onSurface,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+
+            Text(
+                text = when (selectedPeriod) {
+                    UsagePeriod.DAY -> "Time used on ${periodDate.format(DateTimeFormatter.ofPattern("d MMM", LocalLocale.current.platformLocale))}"
+                    UsagePeriod.WEEK -> "Time used from $periodLabel"
+                    UsagePeriod.MONTH -> "Time used in $periodLabel"
+                },
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontSize = 12.sp
+            )
+
+            when {
+                !periodAppsReady || periodAppsState.isLoading -> {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(80.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator()
+                    }
+                }
+
+                periodAppsState.apps.isEmpty() -> {
+                    Text(
+                        text = "No app usage recorded for this period.",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontSize = 12.sp
+                    )
+                }
+
+                else -> periodAppsState.apps.forEach { app ->
+                    AppUsageRow(app = app)
                 }
             }
         }
@@ -796,6 +866,7 @@ private fun formatHistoryDuration(milliseconds: Long): String {
     }
 }
 
+@RequiresApi(Build.VERSION_CODES.S)
 @Preview(showBackground = true)
 @Composable
 private fun HistoryScreenPreview() {
