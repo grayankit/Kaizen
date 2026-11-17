@@ -3,6 +3,7 @@ package me.ankitgrai.kaizen.widget
 import android.appwidget.AppWidgetManager
 import android.content.ComponentName
 import android.content.Context
+import android.util.Log
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.GlanceAppWidgetManager
 import androidx.work.CoroutineWorker
@@ -13,6 +14,7 @@ import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import java.util.concurrent.TimeUnit
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -28,6 +30,8 @@ object WidgetUpdater {
     private var lastPublishAt = 0L
     private var reelPublish: Job? = null
     private var appearancePublish: Job? = null
+    @Volatile
+    private var appearanceAgain = false
 
     fun publish(context: Context) {
         val appContext = context.applicationContext
@@ -58,10 +62,26 @@ object WidgetUpdater {
     fun publishAppearance(context: Context) {
         val appContext = context.applicationContext
         if (!hasWidgets(appContext)) return
-        appearancePublish?.cancel()
-        appearancePublish = scope.launch {
-            delay(APPEARANCE_PUBLISH_DELAY_MS.milliseconds)
-            runCatching { update(appContext) }
+        appearanceAgain = true
+        synchronized(this) {
+            if (appearancePublish?.isActive == true) return
+            appearancePublish = scope.launch {
+                try {
+                    while (appearanceAgain) {
+                        appearanceAgain = false
+                        update(appContext)
+                    }
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (error: Throwable) {
+                    Log.e(TAG, "Failed to publish widget appearance", error)
+                } finally {
+                    synchronized(this@WidgetUpdater) {
+                        appearancePublish = null
+                    }
+                    if (appearanceAgain) publishAppearance(appContext)
+                }
+            }
         }
     }
 
@@ -148,7 +168,7 @@ object WidgetUpdater {
     private const val PERIODIC_WORK = "kaizen.widget.refresh.periodic"
     private const val PUBLISH_DEBOUNCE_MS = 2_000L
     private const val REEL_PUBLISH_DELAY_MS = 300L
-    private const val APPEARANCE_PUBLISH_DELAY_MS = 250L
+    private const val TAG = "WidgetUpdater"
 }
 
 class WidgetRefreshWorker(

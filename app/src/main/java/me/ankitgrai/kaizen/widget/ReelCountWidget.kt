@@ -33,8 +33,8 @@ class ReelCountWidget : GlanceAppWidget() {
     override val sizeMode: SizeMode = SizeMode.Single
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
+        WidgetSettings.ensureLoaded(context)
         val snapshot = withContext(Dispatchers.IO) { loadSnapshot(context) }
-        val opacity = WidgetSettings.readOpacity(context)
         val openApp = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
         }
@@ -44,7 +44,6 @@ class ReelCountWidget : GlanceAppWidget() {
                 reelsToday = context.getString(R.string.widget_reels_today),
                 countingOff = context.getString(R.string.widget_counting_off),
                 openApp = openApp,
-                opacity = opacity,
             )
         }
     }
@@ -70,9 +69,8 @@ private fun ReelCountWidgetContent(
     reelsToday: String,
     countingOff: String,
     openApp: Intent,
-    opacity: Float,
 ) {
-    Box(modifier = GlanceModifier.widgetBackground(opacity)) {
+    Box(modifier = GlanceModifier.widgetBackground(widgetOpacity())) {
         Column(
             modifier = GlanceModifier
                 .fillMaxSize()

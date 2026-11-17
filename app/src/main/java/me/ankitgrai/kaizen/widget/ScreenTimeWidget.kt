@@ -44,8 +44,8 @@ class ScreenTimeWidget : GlanceAppWidget() {
     override val sizeMode: SizeMode = SizeMode.Single
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
+        WidgetSettings.ensureLoaded(context)
         val snapshot = withContext(Dispatchers.IO) { loadSnapshot(context) }
-        val opacity = WidgetSettings.readOpacity(context)
         val ring = if (snapshot.hasAccess) {
             usageRingBitmap(snapshot.progress)
         } else {
@@ -61,7 +61,6 @@ class ScreenTimeWidget : GlanceAppWidget() {
                 grantAccess = context.getString(R.string.widget_grant_access),
                 openAppLabel = context.getString(R.string.widget_open_app),
                 openApp = openApp,
-                opacity = opacity,
             )
         }
     }
@@ -100,9 +99,8 @@ private fun ScreenTimeWidgetContent(
     grantAccess: String,
     openAppLabel: String,
     openApp: Intent,
-    opacity: Float,
 ) {
-    Box(modifier = GlanceModifier.widgetBackground(opacity)) {
+    Box(modifier = GlanceModifier.widgetBackground(widgetOpacity())) {
         ScreenTimeWidgetBody(
             snapshot = snapshot,
             ring = ring,
