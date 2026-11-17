@@ -27,6 +27,7 @@ object WidgetUpdater {
     @Volatile
     private var lastPublishAt = 0L
     private var reelPublish: Job? = null
+    private var appearancePublish: Job? = null
 
     fun publish(context: Context) {
         val appContext = context.applicationContext
@@ -51,6 +52,16 @@ object WidgetUpdater {
                     ReelCountWidgetReceiver::class.java,
                 )
             }
+        }
+    }
+
+    fun publishAppearance(context: Context) {
+        val appContext = context.applicationContext
+        if (!hasWidgets(appContext)) return
+        appearancePublish?.cancel()
+        appearancePublish = scope.launch {
+            delay(APPEARANCE_PUBLISH_DELAY_MS.milliseconds)
+            runCatching { update(appContext) }
         }
     }
 
@@ -137,6 +148,7 @@ object WidgetUpdater {
     private const val PERIODIC_WORK = "kaizen.widget.refresh.periodic"
     private const val PUBLISH_DEBOUNCE_MS = 2_000L
     private const val REEL_PUBLISH_DELAY_MS = 300L
+    private const val APPEARANCE_PUBLISH_DELAY_MS = 250L
 }
 
 class WidgetRefreshWorker(

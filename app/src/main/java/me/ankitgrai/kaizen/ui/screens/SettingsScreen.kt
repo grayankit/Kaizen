@@ -5,6 +5,7 @@ import androidx.annotation.RequiresApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.Box
@@ -12,6 +13,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -42,6 +44,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.contentDescription
@@ -52,6 +56,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
+import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
 import me.ankitgrai.kaizen.data.reel.ReelApps
 import me.ankitgrai.kaizen.data.reel.ReelSetup
@@ -68,7 +73,15 @@ import me.ankitgrai.kaizen.ui.theme.LocalThemeSettings
 import me.ankitgrai.kaizen.ui.theme.ThemeSettings
 import me.ankitgrai.kaizen.ui.theme.colorScheme
 import me.ankitgrai.kaizen.ui.theme.ThemeMode
+import me.ankitgrai.kaizen.widget.WidgetSettings
 import me.ankitgrai.kaizen.widget.WidgetUpdater
+import me.ankitgrai.kaizen.widget.widgetCornerRadius
+import me.ankitgrai.kaizen.widget.widgetDayBackground
+import me.ankitgrai.kaizen.widget.widgetDayContent
+import me.ankitgrai.kaizen.widget.widgetDayMuted
+import me.ankitgrai.kaizen.widget.widgetNightBackground
+import me.ankitgrai.kaizen.widget.widgetNightContent
+import me.ankitgrai.kaizen.widget.widgetNightMuted
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -81,6 +94,7 @@ fun SettingsScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var showTargetDialog by remember { mutableStateOf(false) }
+    var widgetOpacity by remember { mutableIntStateOf(WidgetSettings.readOpacityPercent(context)) }
     var serviceOn by remember { mutableStateOf(ReelSetup.isEnabled(context)) }
     var reelChoices by remember { mutableStateOf(ReelApps.installedChoices(context)) }
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
@@ -183,6 +197,26 @@ fun SettingsScreen(
                 }
             }
 
+            item(key = "widgets-heading") {
+                Text(
+                    text = "Widgets",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+            item(key = "widget-opacity") {
+                KaizenScrollItem(index = 0) {
+                    WidgetOpacityRow(
+                        percent = widgetOpacity,
+                        onPercentChange = { percent ->
+                            widgetOpacity = percent
+                            WidgetSettings.writeOpacityPercent(context, percent)
+                            WidgetUpdater.publishAppearance(context)
+                        }
+                    )
+                }
+            }
+
             item(key = "appearance-heading") {
                 Text(
                     text = "Appearance",
@@ -278,6 +312,111 @@ private fun ScreenTimeTargetRow(
             color = scheme.primary,
             fontWeight = FontWeight.SemiBold
         )
+    }
+}
+
+@Composable
+private fun WidgetOpacityRow(
+    percent: Int,
+    onPercentChange: (Int) -> Unit,
+) {
+    val scheme = MaterialTheme.colorScheme
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(scheme.surfaceVariant)
+            .padding(14.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(2.dp)
+            ) {
+                Text(
+                    text = "Background opacity",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Text(
+                    text = "Lets your wallpaper show through the widgets. Text stays solid.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = scheme.onSurfaceVariant
+                )
+            }
+            Text(
+                text = "$percent%",
+                modifier = Modifier.padding(start = 12.dp),
+                color = scheme.primary,
+                fontWeight = FontWeight.SemiBold
+            )
+        }
+        Slider(
+            value = percent.toFloat(),
+            onValueChange = { raw ->
+                val next = raw.roundToInt().coerceIn(
+                    WidgetSettings.MIN_OPACITY_PERCENT,
+                    WidgetSettings.MAX_OPACITY_PERCENT
+                )
+                if (next != percent) onPercentChange(next)
+            },
+            valueRange = WidgetSettings.MIN_OPACITY_PERCENT.toFloat()..
+                WidgetSettings.MAX_OPACITY_PERCENT.toFloat(),
+            modifier = Modifier.semantics {
+                contentDescription = "Widget background opacity"
+            }
+        )
+        WidgetOpacityPreview(percent)
+    }
+}
+
+@Composable
+private fun WidgetOpacityPreview(percent: Int) {
+    val night = isSystemInDarkTheme()
+    val background = if (night) widgetNightBackground else widgetDayBackground
+    val content = if (night) widgetNightContent else widgetDayContent
+    val muted = if (night) widgetNightMuted else widgetDayMuted
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(96.dp)
+            .clip(RoundedCornerShape(16.dp))
+            .background(
+                Brush.linearGradient(
+                    listOf(
+                        Color(0xFF6C63FF),
+                        Color(0xFFB388FF),
+                        Color(0xFFFF8FAB)
+                    )
+                )
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth(0.62f)
+                .clip(RoundedCornerShape(widgetCornerRadius))
+                .background(background.copy(alpha = percent / 100f))
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                text = "2h 15m",
+                color = content,
+                fontWeight = FontWeight.Bold,
+                style = MaterialTheme.typography.titleMedium
+            )
+            Text(
+                text = "of 6h",
+                color = muted,
+                style = MaterialTheme.typography.bodySmall
+            )
+        }
     }
 }
 
