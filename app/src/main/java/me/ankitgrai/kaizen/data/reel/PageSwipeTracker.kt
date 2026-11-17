@@ -23,7 +23,7 @@ internal class PageSwipeTracker(
         val delta = verticalDelta(sample) ?: return false
         if (delta == 0) return false
         val expired = sample.eventTimeMs - pendingAt > accumulateWindowMs
-        val reversed = pendingY != 0 && (delta > 0) != (pendingY > 0)
+        val reversed = pendingY != 0 && delta > 0 != pendingY > 0
         if (expired || reversed) pendingY = 0
         pendingY += delta
         pendingAt = sample.eventTimeMs

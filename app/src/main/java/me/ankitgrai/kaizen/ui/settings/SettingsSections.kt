@@ -44,7 +44,6 @@ import me.ankitgrai.kaizen.ui.design.SettingsActionRow
 import me.ankitgrai.kaizen.ui.design.SettingsSwitchRow
 import me.ankitgrai.kaizen.ui.theme.AppThemeId
 import me.ankitgrai.kaizen.ui.theme.ThemeMode
-import me.ankitgrai.kaizen.ui.theme.colorScheme
 import me.ankitgrai.kaizen.widget.WidgetSettings
 import me.ankitgrai.kaizen.widget.widgetCornerRadius
 import me.ankitgrai.kaizen.widget.widgetDayBackground

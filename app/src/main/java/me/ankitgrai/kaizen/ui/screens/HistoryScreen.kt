@@ -32,6 +32,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalLocale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
@@ -111,60 +112,32 @@ fun HistoryContent(
 ) {
     val today = LocalDate.now()
     val locale = LocalLocale.current.platformLocale
-
     var selectedPeriod by remember { mutableStateOf(UsagePeriod.WEEK) }
     var periodDate by remember { mutableStateOf(today) }
     var selectedDate by remember { mutableStateOf(today) }
     var selectedHour by remember(periodDate) {
-        mutableIntStateOf(if (periodDate == today) LocalTime.now().hour else -1)
+        mutableIntStateOf(defaultSelectedHour(periodDate, today))
     }
+    val period = historyPeriod(
+        days = historyState.days,
+        selectedPeriod = selectedPeriod,
+        periodDate = periodDate,
+        selectedDate = selectedDate,
+        today = today,
+    )
 
-    LaunchedEffect(selectedPeriod, periodDate, historyState.days) {
-        if (selectedPeriod == UsagePeriod.DAY) {
-            onLoadDayHours(periodDate)
-        }
-    }
-
-    LaunchedEffect(periodDate, dayHoursState.date, dayHoursState.hours) {
-        if (selectedPeriod != UsagePeriod.DAY) return@LaunchedEffect
-        if (dayHoursState.date != periodDate || dayHoursState.hours.isEmpty()) return@LaunchedEffect
-        if (selectedHour < 0) {
-            selectedHour = dayHoursState.hours.maxBy { it.totalUsageMillis }.hour
-        }
-    }
-
-    val hoursReady = dayHoursState.date == periodDate && !dayHoursState.isLoading
-    val hoursAvailable = hoursReady && dayHoursState.available
-    val selectedHourUsage = dayHoursState.hours.firstOrNull { it.hour == selectedHour }
-    val historyByDate = historyState.days.associateBy { it.date }
-    val chartDays = chartDates(selectedPeriod, periodDate).map { date ->
-        historyByDate[date] ?: DailyDeviceUsage(
-            date = date,
-            totalUsageMillis = 0L,
-            recorded = false,
-        )
-    }
-    val periodStart = chartDays.first().date
-    val periodEnd = chartDays.last().date.coerceAtMost(today)
-
-    LaunchedEffect(periodStart, periodEnd) {
-        onLoadMostUsedForPeriod(periodStart, periodEnd)
-    }
-
-    val periodAppsReady = periodAppsState.startDate == periodStart &&
-        periodAppsState.endDate == periodEnd
-    val selectedDay = chartDays.firstOrNull { it.date == selectedDate }
-        ?: chartDays.lastOrNull { !it.date.isAfter(today) }
-    val recordedDays = chartDays.filter {
-        !it.date.isAfter(today) && historyByDate.containsKey(it.date)
-    }
-    val totalUsage = recordedDays.sumOf { it.totalUsageMillis }
-    val averageUsage = if (recordedDays.isNotEmpty()) {
-        totalUsage / recordedDays.size
-    } else {
-        0L
-    }
-    val label = periodLabel(periodDate, selectedPeriod, locale)
+    SyncHistoryLoads(
+        selectedPeriod = selectedPeriod,
+        periodDate = periodDate,
+        historyDays = historyState.days,
+        dayHoursState = dayHoursState,
+        selectedHour = selectedHour,
+        periodStart = period.periodStart,
+        periodEnd = period.periodEnd,
+        onLoadDayHours = onLoadDayHours,
+        onLoadMostUsedForPeriod = onLoadMostUsedForPeriod,
+        onSelectHour = { selectedHour = it },
+    )
 
     KaizenPullToRefresh(
         isRefreshing = isRefreshing,
@@ -182,65 +155,24 @@ fun HistoryContent(
                 title = "History",
                 subtitle = "Understand where your time goes.",
             )
-
             PeriodSelector(
                 selectedPeriod = selectedPeriod,
-                onPeriodSelected = { period ->
-                    selectedPeriod = period
+                onPeriodSelected = { periodChoice ->
+                    selectedPeriod = periodChoice
                     periodDate = today
                     selectedDate = today
                 },
                 modifier = Modifier.fillMaxWidth(),
             )
-
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(20.dp))
-                    .background(chartSurfaceColor())
-                    .padding(18.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                Text(
-                    text = when (selectedPeriod) {
-                        UsagePeriod.DAY -> "DAILY USAGE"
-                        UsagePeriod.WEEK -> "WEEKLY USAGE"
-                        UsagePeriod.MONTH -> "MONTHLY USAGE"
-                    },
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.SemiBold,
-                )
-                Text(
-                    text = if (historyState.isLoading && historyState.days.isEmpty()) {
-                        "Loading..."
-                    } else {
-                        formatDuration(totalUsage)
-                    },
-                    color = MaterialTheme.colorScheme.onSurface,
-                    fontSize = 27.sp,
-                    fontWeight = FontWeight.Bold,
-                )
-                Text(
-                    text = when {
-                        historyState.isLoading && historyState.days.isEmpty() ->
-                            "Fetching device usage"
-                        historyState.error != null -> historyState.error
-                        recordedDays.isEmpty() ->
-                            "No recorded usage available for this period"
-                        else -> "Average per recorded day: ${formatDuration(averageUsage)}"
-                    },
-                    color = if (historyState.error != null) {
-                        MaterialTheme.colorScheme.error
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    },
-                    fontSize = 11.sp,
-                )
-            }
-
+            HistorySummaryCard(
+                period = selectedPeriod,
+                historyState = historyState,
+                totalUsage = period.totalUsage,
+                averageUsage = period.averageUsage,
+                recordedEmpty = period.recordedDays.isEmpty(),
+            )
             PeriodNavigation(
-                label = label,
+                label = periodLabel(periodDate, selectedPeriod, locale),
                 canGoForward = canAdvance(periodDate, selectedPeriod, today),
                 onPrevious = {
                     periodDate = shiftPeriod(periodDate, selectedPeriod, -1)
@@ -251,128 +183,464 @@ fun HistoryContent(
                     selectedDate = periodDate
                 },
             )
-
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(20.dp))
-                    .background(chartSurfaceColor())
-                    .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp),
-            ) {
-                Text(
-                    text = when (selectedPeriod) {
-                        UsagePeriod.DAY -> "Usage by hour"
-                        UsagePeriod.WEEK -> "Daily screen time"
-                        UsagePeriod.MONTH -> "Usage by day"
-                    },
-                    color = MaterialTheme.colorScheme.onSurface,
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.SemiBold,
-                )
-
-                when {
-                    historyState.isLoading && historyState.days.isEmpty() ->
-                        CenteredProgress(height = 150.dp)
-
-                    historyState.error != null -> Text(
-                        text = "Couldn't load your usage history.\n${historyState.error}",
-                        color = MaterialTheme.colorScheme.error,
-                    )
-
-                    selectedPeriod == UsagePeriod.DAY && !hoursReady ->
-                        CenteredProgress(height = 150.dp)
-
-                    selectedPeriod == UsagePeriod.DAY && !hoursAvailable -> Text(
-                        text = "Hourly usage isn't available for this day.",
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-
-                    selectedPeriod == UsagePeriod.DAY -> {
-                        HourlyUsageChart(
-                            date = periodDate,
-                            hours = dayHoursState.hours,
-                            selectedHour = selectedHour,
-                            today = today,
-                            onHourSelected = { selectedHour = it },
-                        )
-                        if (selectedHour in 0..23) {
-                            val recorded = selectedHourUsage != null &&
-                                !isFutureHour(periodDate, selectedHour, today)
-                            UsageDetailCard(
-                                title = formatHourRange(selectedHour, locale),
-                                subtitle = if (recorded) "Screen time" else "No usage yet",
-                                value = if (recorded) {
-                                    formatDuration(selectedHourUsage.totalUsageMillis)
-                                } else {
-                                    "—"
-                                },
-                            )
-                        }
-                    }
-
-                    else -> {
-                        HistoryUsageChart(
-                            days = chartDays,
-                            selectedDate = selectedDay?.date,
-                            today = today,
-                            period = selectedPeriod,
-                            onDaySelected = { selectedDate = it },
-                        )
-                        selectedDay?.let { day ->
-                            UsageDetailCard(
-                                title = day.date.formatWeekdayDate(locale),
-                                subtitle = when {
-                                    !day.recorded -> "No usage data saved"
-                                    day.date == today -> "Today's screen time"
-                                    else -> "Screen time"
-                                },
-                                value = if (day.recorded) {
-                                    formatDuration(day.totalUsageMillis)
-                                } else {
-                                    "—"
-                                },
-                            )
-                        }
-                    }
-                }
-            }
-
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(20.dp))
-                    .background(chartSurfaceColor())
-                    .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                Text(
-                    text = "Most used apps",
-                    color = MaterialTheme.colorScheme.onSurface,
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.SemiBold,
-                )
-                Text(
-                    text = when (selectedPeriod) {
-                        UsagePeriod.DAY -> "Time used on ${periodDate.formatShortDayMonth(locale)}"
-                        UsagePeriod.WEEK -> "Time used from $label"
-                        UsagePeriod.MONTH -> "Time used in $label"
-                    },
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontSize = 12.sp,
-                )
-                MostUsedApps(
-                    apps = periodAppsState.apps,
-                    isLoading = !periodAppsReady || periodAppsState.isLoading,
-                    emptyText = "No app usage recorded for this period.",
-                    itemSpacing = 12.dp,
-                    emptyFontSize = 12.sp,
-                )
-            }
-
+            HistoryChartCard(
+                historyState = historyState,
+                selectedPeriod = selectedPeriod,
+                periodDate = periodDate,
+                chartDays = period.chartDays,
+                selectedDay = period.selectedDay,
+                dayHoursState = dayHoursState,
+                selectedHour = selectedHour,
+                today = today,
+                locale = locale,
+                onHourSelected = { selectedHour = it },
+                onDaySelected = { selectedDate = it },
+            )
+            HistoryMostUsedCard(
+                selectedPeriod = selectedPeriod,
+                periodDate = periodDate,
+                periodLabel = periodLabel(periodDate, selectedPeriod, locale),
+                periodAppsState = periodAppsState,
+                periodStart = period.periodStart,
+                periodEnd = period.periodEnd,
+                locale = locale,
+            )
             Spacer(modifier = Modifier.height(12.dp))
         }
     }
+}
+
+private fun defaultSelectedHour(periodDate: LocalDate, today: LocalDate): Int {
+    return if (periodDate == today) LocalTime.now().hour else -1
+}
+
+private data class HistoryPeriod(
+    val chartDays: List<DailyDeviceUsage>,
+    val periodStart: LocalDate,
+    val periodEnd: LocalDate,
+    val selectedDay: DailyDeviceUsage?,
+    val recordedDays: List<DailyDeviceUsage>,
+    val totalUsage: Long,
+    val averageUsage: Long,
+)
+
+private fun historyPeriod(
+    days: List<DailyDeviceUsage>,
+    selectedPeriod: UsagePeriod,
+    periodDate: LocalDate,
+    selectedDate: LocalDate,
+    today: LocalDate,
+): HistoryPeriod {
+    val historyByDate = days.associateBy { it.date }
+    val chartDays = chartDates(selectedPeriod, periodDate).map { date ->
+        historyByDate[date] ?: DailyDeviceUsage(
+            date = date,
+            totalUsageMillis = 0L,
+            recorded = false,
+        )
+    }
+    val recordedDays = chartDays.filter { recordedOn(it, today, historyByDate) }
+    val totalUsage = recordedDays.sumOf { it.totalUsageMillis }
+    return HistoryPeriod(
+        chartDays = chartDays,
+        periodStart = chartDays.first().date,
+        periodEnd = chartDays.last().date.coerceAtMost(today),
+        selectedDay = selectedChartDay(chartDays, selectedDate, today),
+        recordedDays = recordedDays,
+        totalUsage = totalUsage,
+        averageUsage = averageUsage(recordedDays, totalUsage),
+    )
+}
+
+private fun recordedOn(
+    day: DailyDeviceUsage,
+    today: LocalDate,
+    historyByDate: Map<LocalDate, DailyDeviceUsage>,
+): Boolean {
+    return !day.date.isAfter(today) && historyByDate.containsKey(day.date)
+}
+
+private fun selectedChartDay(
+    chartDays: List<DailyDeviceUsage>,
+    selectedDate: LocalDate,
+    today: LocalDate,
+): DailyDeviceUsage? {
+    return chartDays.firstOrNull { it.date == selectedDate }
+        ?: chartDays.lastOrNull { !it.date.isAfter(today) }
+}
+
+private fun averageUsage(recordedDays: List<DailyDeviceUsage>, totalUsage: Long): Long {
+    if (recordedDays.isEmpty()) return 0L
+    return totalUsage / recordedDays.size
+}
+
+@Composable
+private fun SyncHistoryLoads(
+    selectedPeriod: UsagePeriod,
+    periodDate: LocalDate,
+    historyDays: List<DailyDeviceUsage>,
+    dayHoursState: DayHoursUiState,
+    selectedHour: Int,
+    periodStart: LocalDate,
+    periodEnd: LocalDate,
+    onLoadDayHours: (LocalDate) -> Unit,
+    onLoadMostUsedForPeriod: (LocalDate, LocalDate) -> Unit,
+    onSelectHour: (Int) -> Unit,
+) {
+    LaunchedEffect(selectedPeriod, periodDate, historyDays) {
+        if (selectedPeriod == UsagePeriod.DAY) onLoadDayHours(periodDate)
+    }
+    LaunchedEffect(periodDate, dayHoursState.date, dayHoursState.hours, selectedPeriod) {
+        selectBusiestHour(selectedPeriod, periodDate, dayHoursState, selectedHour, onSelectHour)
+    }
+    LaunchedEffect(periodStart, periodEnd) {
+        onLoadMostUsedForPeriod(periodStart, periodEnd)
+    }
+}
+
+private fun selectBusiestHour(
+    selectedPeriod: UsagePeriod,
+    periodDate: LocalDate,
+    dayHoursState: DayHoursUiState,
+    selectedHour: Int,
+    onSelectHour: (Int) -> Unit,
+) {
+    if (selectedPeriod != UsagePeriod.DAY) return
+    if (dayHoursState.date != periodDate || dayHoursState.hours.isEmpty()) return
+    if (selectedHour >= 0) return
+    onSelectHour(dayHoursState.hours.maxBy { it.totalUsageMillis }.hour)
+}
+
+@Composable
+private fun HistorySummaryCard(
+    period: UsagePeriod,
+    historyState: HistoryUiState,
+    totalUsage: Long,
+    averageUsage: Long,
+    recordedEmpty: Boolean,
+) {
+    val loadingEmpty = historyState.isLoading && historyState.days.isEmpty()
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(20.dp))
+            .background(chartSurfaceColor())
+            .padding(18.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Text(
+            text = usageHeading(period),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            fontSize = 10.sp,
+            fontWeight = FontWeight.SemiBold,
+        )
+        Text(
+            text = summaryValue(loadingEmpty, totalUsage),
+            color = MaterialTheme.colorScheme.onSurface,
+            fontSize = 27.sp,
+            fontWeight = FontWeight.Bold,
+        )
+        Text(
+            text = summaryCaption(loadingEmpty, historyState.error, recordedEmpty, averageUsage),
+            color = summaryCaptionColor(historyState.error),
+            fontSize = 11.sp,
+        )
+    }
+}
+
+private fun usageHeading(period: UsagePeriod): String = when (period) {
+    UsagePeriod.DAY -> "DAILY USAGE"
+    UsagePeriod.WEEK -> "WEEKLY USAGE"
+    UsagePeriod.MONTH -> "MONTHLY USAGE"
+}
+
+private fun summaryValue(loadingEmpty: Boolean, totalUsage: Long): String {
+    return if (loadingEmpty) "Loading..." else formatDuration(totalUsage)
+}
+
+private fun summaryCaption(
+    loadingEmpty: Boolean,
+    error: String?,
+    recordedEmpty: Boolean,
+    averageUsage: Long,
+): String {
+    if (loadingEmpty) return "Fetching device usage"
+    if (error != null) return error
+    if (recordedEmpty) return "No recorded usage available for this period"
+    return "Average per recorded day: ${formatDuration(averageUsage)}"
+}
+
+@Composable
+private fun summaryCaptionColor(error: String?): Color {
+    return if (error != null) {
+        MaterialTheme.colorScheme.error
+    } else {
+        MaterialTheme.colorScheme.onSurfaceVariant
+    }
+}
+
+@Composable
+private fun HistoryChartCard(
+    historyState: HistoryUiState,
+    selectedPeriod: UsagePeriod,
+    periodDate: LocalDate,
+    chartDays: List<DailyDeviceUsage>,
+    selectedDay: DailyDeviceUsage?,
+    dayHoursState: DayHoursUiState,
+    selectedHour: Int,
+    today: LocalDate,
+    locale: java.util.Locale,
+    onHourSelected: (Int) -> Unit,
+    onDaySelected: (LocalDate) -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(20.dp))
+            .background(chartSurfaceColor())
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
+        Text(
+            text = chartHeading(selectedPeriod),
+            color = MaterialTheme.colorScheme.onSurface,
+            fontSize = 16.sp,
+            fontWeight = FontWeight.SemiBold,
+        )
+        HistoryChartBody(
+            historyState = historyState,
+            selectedPeriod = selectedPeriod,
+            periodDate = periodDate,
+            chartDays = chartDays,
+            selectedDay = selectedDay,
+            dayHoursState = dayHoursState,
+            selectedHour = selectedHour,
+            today = today,
+            locale = locale,
+            onHourSelected = onHourSelected,
+            onDaySelected = onDaySelected,
+        )
+    }
+}
+
+private fun chartHeading(period: UsagePeriod): String = when (period) {
+    UsagePeriod.DAY -> "Usage by hour"
+    UsagePeriod.WEEK -> "Daily screen time"
+    UsagePeriod.MONTH -> "Usage by day"
+}
+
+@Composable
+private fun HistoryChartBody(
+    historyState: HistoryUiState,
+    selectedPeriod: UsagePeriod,
+    periodDate: LocalDate,
+    chartDays: List<DailyDeviceUsage>,
+    selectedDay: DailyDeviceUsage?,
+    dayHoursState: DayHoursUiState,
+    selectedHour: Int,
+    today: LocalDate,
+    locale: java.util.Locale,
+    onHourSelected: (Int) -> Unit,
+    onDaySelected: (LocalDate) -> Unit,
+) {
+    if (historyState.isLoading && historyState.days.isEmpty()) {
+        CenteredProgress(height = 150.dp)
+        return
+    }
+    val error = historyState.error
+    if (error != null) {
+        HistoryError(error)
+        return
+    }
+    if (selectedPeriod == UsagePeriod.DAY) {
+        DayHistoryBody(
+            date = periodDate,
+            hours = dayHoursState.hours,
+            selectedHour = selectedHour,
+            today = today,
+            hoursReady = hoursReady(dayHoursState, periodDate),
+            hoursAvailable = hoursAvailable(dayHoursState, periodDate),
+            selectedHourUsage = dayHoursState.hours.firstOrNull { it.hour == selectedHour },
+            locale = locale,
+            onHourSelected = onHourSelected,
+        )
+    } else {
+        PeriodHistoryBody(
+            chartDays = chartDays,
+            selectedDay = selectedDay,
+            today = today,
+            period = selectedPeriod,
+            locale = locale,
+            onDaySelected = onDaySelected,
+        )
+    }
+}
+
+@Composable
+private fun HistoryError(message: String) {
+    Text(
+        text = "Couldn't load your usage history.\n$message",
+        color = MaterialTheme.colorScheme.error,
+    )
+}
+
+private fun hoursReady(state: DayHoursUiState, periodDate: LocalDate): Boolean {
+    return state.date == periodDate && !state.isLoading
+}
+
+private fun hoursAvailable(state: DayHoursUiState, periodDate: LocalDate): Boolean {
+    return hoursReady(state, periodDate) && state.available
+}
+
+@Composable
+private fun DayHistoryBody(
+    date: LocalDate,
+    hours: List<HourlyDeviceUsage>,
+    selectedHour: Int,
+    today: LocalDate,
+    hoursReady: Boolean,
+    hoursAvailable: Boolean,
+    selectedHourUsage: HourlyDeviceUsage?,
+    locale: java.util.Locale,
+    onHourSelected: (Int) -> Unit,
+) {
+    if (!hoursReady) {
+        CenteredProgress(height = 150.dp)
+        return
+    }
+    if (!hoursAvailable) {
+        Text(
+            text = "Hourly usage isn't available for this day.",
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        return
+    }
+    HourlyUsageChart(
+        date = date,
+        hours = hours,
+        selectedHour = selectedHour,
+        today = today,
+        onHourSelected = onHourSelected,
+    )
+    if (selectedHour in 0..23) {
+        HourDetail(date, selectedHour, selectedHourUsage, today, locale)
+    }
+}
+
+@Composable
+private fun HourDetail(
+    date: LocalDate,
+    hour: Int,
+    usage: HourlyDeviceUsage?,
+    today: LocalDate,
+    locale: java.util.Locale,
+) {
+    val recorded = hourRecorded(date, hour, usage, today)
+    UsageDetailCard(
+        title = formatHourRange(hour, locale),
+        subtitle = if (recorded) "Screen time" else "No usage yet",
+        value = hourDetailValue(recorded, usage),
+    )
+}
+
+private fun hourRecorded(
+    date: LocalDate,
+    hour: Int,
+    usage: HourlyDeviceUsage?,
+    today: LocalDate,
+): Boolean {
+    return usage != null && !isFutureHour(date, hour, today)
+}
+
+private fun hourDetailValue(recorded: Boolean, usage: HourlyDeviceUsage?): String {
+    if (!recorded || usage == null) return "—"
+    return formatDuration(usage.totalUsageMillis)
+}
+
+@Composable
+private fun PeriodHistoryBody(
+    chartDays: List<DailyDeviceUsage>,
+    selectedDay: DailyDeviceUsage?,
+    today: LocalDate,
+    period: UsagePeriod,
+    locale: java.util.Locale,
+    onDaySelected: (LocalDate) -> Unit,
+) {
+    HistoryUsageChart(
+        days = chartDays,
+        selectedDate = selectedDay?.date,
+        today = today,
+        period = period,
+        onDaySelected = onDaySelected,
+    )
+    val day = selectedDay ?: return
+    UsageDetailCard(
+        title = day.date.formatWeekdayDate(locale),
+        subtitle = dayDetailSubtitle(day, today),
+        value = dayDetailValue(day),
+    )
+}
+
+private fun dayDetailSubtitle(day: DailyDeviceUsage, today: LocalDate): String = when {
+    !day.recorded -> "No usage data saved"
+    day.date == today -> "Today's screen time"
+    else -> "Screen time"
+}
+
+private fun dayDetailValue(day: DailyDeviceUsage): String {
+    return if (day.recorded) formatDuration(day.totalUsageMillis) else "—"
+}
+
+@Composable
+private fun HistoryMostUsedCard(
+    selectedPeriod: UsagePeriod,
+    periodDate: LocalDate,
+    periodLabel: String,
+    periodAppsState: PeriodAppsUiState,
+    periodStart: LocalDate,
+    periodEnd: LocalDate,
+    locale: java.util.Locale,
+) {
+    val ready = periodAppsState.startDate == periodStart &&
+        periodAppsState.endDate == periodEnd
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(20.dp))
+            .background(chartSurfaceColor())
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Text(
+            text = "Most used apps",
+            color = MaterialTheme.colorScheme.onSurface,
+            fontSize = 16.sp,
+            fontWeight = FontWeight.SemiBold,
+        )
+        Text(
+            text = mostUsedSubtitle(selectedPeriod, periodDate, periodLabel, locale),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            fontSize = 12.sp,
+        )
+        MostUsedApps(
+            apps = periodAppsState.apps,
+            isLoading = !ready || periodAppsState.isLoading,
+            emptyText = "No app usage recorded for this period.",
+            itemSpacing = 12.dp,
+            emptyFontSize = 12.sp,
+        )
+    }
+}
+
+private fun mostUsedSubtitle(
+    period: UsagePeriod,
+    periodDate: LocalDate,
+    periodLabel: String,
+    locale: java.util.Locale,
+): String = when (period) {
+    UsagePeriod.DAY -> "Time used on ${periodDate.formatShortDayMonth(locale)}"
+    UsagePeriod.WEEK -> "Time used from $periodLabel"
+    UsagePeriod.MONTH -> "Time used in $periodLabel"
 }
 
 @Composable

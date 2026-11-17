@@ -5,23 +5,30 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.ui.graphics.Color
 
-enum class AppThemeId(val storageKey: String, val label: String) {
-    Material("material", "Material You"),
-    Oriax("oriax", "OriaX"),
-    Saikou("saikou", "Saikou"),
-    RosePine("rosePine", "Rosé Pine"),
-    Catppuccin("catppuccin", "Catppuccin"),
-    OneDark("oneDark", "One Dark"),
-    Gruvbox("gruvbox", "Gruvbox"),
-    Nord("nord", "Nord"),
-    Dracula("dracula", "Dracula"),
-    TokyoNight("tokyoNight", "Tokyo Night"),
-    Github("github", "GitHub"),
-    Everforest("everforest", "Everforest"),
-    Kanagawa("kanagawa", "Kanagawa"),
-    Monokai("monokai", "Monokai"),
-    Solarized("solarized", "Solarized"),
-;
+enum class AppThemeId(
+    val storageKey: String,
+    val label: String,
+    private val lightScheme: () -> ColorScheme,
+    private val darkScheme: () -> ColorScheme,
+) {
+    Material("material", "Material You", ::nordLight, ::nordDark),
+    Oriax("oriax", "OriaX", ::oriaxLight, ::oriaxDark),
+    Saikou("saikou", "Saikou", ::saikouLight, ::saikouDark),
+    RosePine("rosePine", "Rosé Pine", ::rosePineLight, ::rosePineDark),
+    Catppuccin("catppuccin", "Catppuccin", ::catppuccinLight, ::catppuccinDark),
+    OneDark("oneDark", "One Dark", ::oneDarkLight, ::oneDarkDark),
+    Gruvbox("gruvbox", "Gruvbox", ::gruvboxLight, ::gruvboxDark),
+    Nord("nord", "Nord", ::nordLight, ::nordDark),
+    Dracula("dracula", "Dracula", ::draculaLight, ::draculaDark),
+    TokyoNight("tokyoNight", "Tokyo Night", ::tokyoNightLight, ::tokyoNightDark),
+    Github("github", "GitHub", ::githubLight, ::githubDark),
+    Everforest("everforest", "Everforest", ::everforestLight, ::everforestDark),
+    Kanagawa("kanagawa", "Kanagawa", ::kanagawaLight, ::kanagawaDark),
+    Monokai("monokai", "Monokai", ::monokaiLight, ::monokaiDark),
+    Solarized("solarized", "Solarized", ::solarizedLight, ::solarizedDark),
+    ;
+
+    fun colorScheme(dark: Boolean): ColorScheme = if (dark) darkScheme() else lightScheme()
 
     companion object {
         fun fromKey(key: String) = entries.firstOrNull { it.storageKey == key } ?: Material
@@ -933,21 +940,3 @@ internal fun solarizedDark(): ColorScheme = darkColorScheme(
     scrim = Color(0xFF000000),
     surfaceContainerHighest = Color(0xFF073642),
 )
-
-fun AppThemeId.colorScheme(dark: Boolean): ColorScheme = when (this) {
-    AppThemeId.Material -> if (dark) nordDark() else nordLight()
-    AppThemeId.Oriax -> if (dark) oriaxDark() else oriaxLight()
-    AppThemeId.Saikou -> if (dark) saikouDark() else saikouLight()
-    AppThemeId.RosePine -> if (dark) rosePineDark() else rosePineLight()
-    AppThemeId.Catppuccin -> if (dark) catppuccinDark() else catppuccinLight()
-    AppThemeId.OneDark -> if (dark) oneDarkDark() else oneDarkLight()
-    AppThemeId.Gruvbox -> if (dark) gruvboxDark() else gruvboxLight()
-    AppThemeId.Nord -> if (dark) nordDark() else nordLight()
-    AppThemeId.Dracula -> if (dark) draculaDark() else draculaLight()
-    AppThemeId.TokyoNight -> if (dark) tokyoNightDark() else tokyoNightLight()
-    AppThemeId.Github -> if (dark) githubDark() else githubLight()
-    AppThemeId.Everforest -> if (dark) everforestDark() else everforestLight()
-    AppThemeId.Kanagawa -> if (dark) kanagawaDark() else kanagawaLight()
-    AppThemeId.Monokai -> if (dark) monokaiDark() else monokaiLight()
-    AppThemeId.Solarized -> if (dark) solarizedDark() else solarizedLight()
-}

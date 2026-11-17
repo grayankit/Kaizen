@@ -150,138 +150,182 @@ class UsageStateDataSource (
         val windowStart = today.minusDays((days - 1).toLong())
         val windowStartMillis = windowStart.atStartOfDay(zone).toInstant().toEpochMilli()
         val now = System.currentTimeMillis()
-
         val events = usageStatsManager.queryEvents(
-            windowStartMillis - 24 * 60 * 60 * 1000L,
+            windowStartMillis - DAY_MILLIS,
             now
-        ) ?: return ObservedUsage(null, emptyMap(), emptyList())
+        ) ?: return emptyObservedUsage()
 
+        val slices = UsageSliceAccumulator(zone, windowStart, today, windowStartMillis, now)
+        slices.consume(events)
+        return slices.toObservedUsage()
+    }
+}
+
+private const val DAY_MILLIS = 24 * 60 * 60 * 1000L
+
+private fun emptyObservedUsage() = ObservedUsage(null, emptyMap(), emptyList())
+
+private class UsageSliceAccumulator(
+    private val zone: ZoneId,
+    private val windowStart: LocalDate,
+    private val today: LocalDate,
+    private val windowStartMillis: Long,
+    private val now: Long,
+) {
+    private var screenOn = false
+    private var resumedPackage: String? = null
+    private var countingSince: Long? = null
+    private var oldestEvent: Long? = null
+    private val deviceSlices = mutableMapOf<LocalDate, Long>()
+    private val hourSlices = mutableMapOf<Pair<LocalDate, Int>, Long>()
+    private val appSlices = mutableMapOf<Pair<LocalDate, String>, Long>()
+
+    fun consume(events: UsageEvents) {
         val event = UsageEvents.Event()
-        var oldestEvent: Long? = null
-        var screenOn = false
-        var resumedPackage: String? = null
-        var countingSince: Long? = null
-        val deviceSlices = mutableMapOf<LocalDate, Long>()
-        val hourSlices = mutableMapOf<Pair<LocalDate, Int>, Long>()
-        val appSlices = mutableMapOf<Pair<LocalDate, String>, Long>()
-
-        fun addElapsed(until: Long) {
-            val since = countingSince ?: return
-            val pkg = resumedPackage
-            val from = maxOf(since, windowStartMillis)
-            val to = minOf(until, now)
-            if (pkg != null && to > from) {
-                var cursor = from
-                while (cursor < to) {
-                    val date = Instant.ofEpochMilli(cursor).atZone(zone).toLocalDate()
-                    val nextMidnight = date.plusDays(1)
-                        .atStartOfDay(zone)
-                        .toInstant()
-                        .toEpochMilli()
-                    val sliceEnd = minOf(to, nextMidnight)
-                    val slice = sliceEnd - cursor
-                    if (
-                        slice > 0 &&
-                        !date.isBefore(windowStart) &&
-                        !date.isAfter(today) &&
-                        pkg !in NON_SCREEN_TIME
-                    ) {
-                        // Screen time is one clock, including this app and the launcher.
-                        // Phone, in-call, and emergency screens are not counted by
-                        // Digital Wellbeing, so they stay out of the total too.
-                        deviceSlices[date] = (deviceSlices[date] ?: 0L) + slice
-                        val key = date to pkg
-                        appSlices[key] = (appSlices[key] ?: 0L) + slice
-                        addHourSlices(hourSlices, zone, date, cursor, sliceEnd)
-                    }
-                    cursor = sliceEnd
-                }
-            }
-            countingSince = null
-        }
-
-        fun maybeStart(at: Long) {
-            if (screenOn && resumedPackage != null && countingSince == null) {
-                countingSince = at
-            }
-        }
-
         while (events.hasNextEvent()) {
             events.getNextEvent(event)
-            val time = event.timeStamp
-            if (oldestEvent == null || time < oldestEvent) {
-                oldestEvent = time
-            }
-            when (event.eventType) {
-                UsageEvents.Event.SCREEN_INTERACTIVE -> {
-                    screenOn = true
-                    maybeStart(time)
-                }
-                UsageEvents.Event.SCREEN_NON_INTERACTIVE -> {
-                    addElapsed(time)
-                    screenOn = false
-                }
-                UsageEvents.Event.ACTIVITY_RESUMED -> {
-                    addElapsed(time)
-                    resumedPackage = event.packageName
-                    maybeStart(time)
-                }
-                UsageEvents.Event.ACTIVITY_PAUSED,
-                UsageEvents.Event.ACTIVITY_STOPPED -> {
-                    if (event.packageName == resumedPackage) {
-                        addElapsed(time)
-                        resumedPackage = null
-                    }
-                }
-            }
+            onEvent(event)
         }
         addElapsed(now)
+    }
 
-        val oldest = oldestEvent ?: return ObservedUsage(null, emptyMap(), emptyList())
+    fun toObservedUsage(): ObservedUsage {
+        val oldest = oldestEvent ?: return emptyObservedUsage()
         val earliest = maxOf(
             Instant.ofEpochMilli(oldest).atZone(zone).toLocalDate(),
             windowStart
         )
-        if (earliest.isAfter(today)) {
-            return ObservedUsage(null, emptyMap(), emptyList())
-        }
+        if (earliest.isAfter(today)) return emptyObservedUsage()
+        return ObservedUsage(
+            earliestObserved = earliest,
+            deviceTotals = deviceTotals(earliest),
+            appTotals = appTotals(earliest),
+            hourTotals = hourTotals(earliest),
+        )
+    }
 
-        val deviceTotals = mutableMapOf<LocalDate, Long>()
+    private fun onEvent(event: UsageEvents.Event) {
+        val time = event.timeStamp
+        rememberOldest(time)
+        when (event.eventType) {
+            UsageEvents.Event.SCREEN_INTERACTIVE -> startScreen(time)
+            UsageEvents.Event.SCREEN_NON_INTERACTIVE -> stopScreen(time)
+            UsageEvents.Event.ACTIVITY_RESUMED -> resume(event.packageName, time)
+            UsageEvents.Event.ACTIVITY_PAUSED,
+            UsageEvents.Event.ACTIVITY_STOPPED -> pause(event.packageName, time)
+        }
+    }
+
+    private fun rememberOldest(time: Long) {
+        val oldest = oldestEvent
+        if (oldest == null || time < oldest) oldestEvent = time
+    }
+
+    private fun startScreen(time: Long) {
+        screenOn = true
+        maybeStart(time)
+    }
+
+    private fun stopScreen(time: Long) {
+        addElapsed(time)
+        screenOn = false
+    }
+
+    private fun resume(packageName: String, time: Long) {
+        addElapsed(time)
+        resumedPackage = packageName
+        maybeStart(time)
+    }
+
+    private fun pause(packageName: String, time: Long) {
+        if (packageName != resumedPackage) return
+        addElapsed(time)
+        resumedPackage = null
+    }
+
+    private fun maybeStart(at: Long) {
+        if (screenOn && resumedPackage != null && countingSince == null) {
+            countingSince = at
+        }
+    }
+
+    private fun addElapsed(until: Long) {
+        val since = countingSince ?: return
+        val pkg = resumedPackage
+        val from = maxOf(since, windowStartMillis)
+        val to = minOf(until, now)
+        if (pkg != null && to > from) walkSlices(pkg, from, to)
+        countingSince = null
+    }
+
+    private fun walkSlices(pkg: String, from: Long, to: Long) {
+        var cursor = from
+        while (cursor < to) {
+            val date = Instant.ofEpochMilli(cursor).atZone(zone).toLocalDate()
+            val nextMidnight = date.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli()
+            val sliceEnd = minOf(to, nextMidnight)
+            recordSlice(date, pkg, cursor, sliceEnd)
+            cursor = sliceEnd
+        }
+    }
+
+    private fun recordSlice(date: LocalDate, pkg: String, from: Long, to: Long) {
+        val slice = to - from
+        if (!countsAsScreenTime(date, pkg, slice)) return
+        deviceSlices[date] = deviceSlices.getOrDefault(date, 0L) + slice
+        val key = date to pkg
+        appSlices[key] = appSlices.getOrDefault(key, 0L) + slice
+        addHourSlices(hourSlices, zone, date, from, to)
+    }
+
+    private fun countsAsScreenTime(date: LocalDate, pkg: String, slice: Long): Boolean {
+        if (slice <= 0) return false
+        if (date.isBefore(windowStart) || date.isAfter(today)) return false
+        return pkg !in NON_SCREEN_TIME
+    }
+
+    private fun deviceTotals(earliest: LocalDate): Map<LocalDate, Long> {
+        val totals = mutableMapOf<LocalDate, Long>()
         var date = earliest
         while (!date.isAfter(today)) {
-            deviceTotals[date] = deviceSlices[date] ?: 0L
+            totals[date] = deviceSlices.getOrDefault(date, 0L)
             date = date.plusDays(1)
         }
-        val appTotals = appSlices
-            .filterKeys { (day, _) -> !day.isBefore(earliest) && !day.isAfter(today) }
+        return totals
+    }
+
+    private fun appTotals(earliest: LocalDate): List<AppDayUsage> {
+        return appSlices
+            .filter { (key, _) -> observedDay(key.first, earliest) }
             .map { (key, millis) ->
                 AppDayUsage(
                     date = key.first,
                     packageName = key.second,
-                    totalUsageMillis = millis
+                    totalUsageMillis = millis,
                 )
             }
-        val hourTotals = buildList {
-            var hourDate = earliest
-            while (!hourDate.isAfter(today)) {
-                for (hour in 0..23) {
-                    add(
-                        HourlyDeviceUsage(
-                            date = hourDate,
-                            hour = hour,
-                            totalUsageMillis = hourSlices[hourDate to hour] ?: 0L
-                        )
-                    )
-                }
-                hourDate = hourDate.plusDays(1)
-            }
+    }
+
+    private fun hourTotals(earliest: LocalDate): List<HourlyDeviceUsage> = buildList {
+        var date = earliest
+        while (!date.isAfter(today)) {
+            addAll(hoursOn(date))
+            date = date.plusDays(1)
         }
-        return ObservedUsage(
-            earliestObserved = earliest,
-            deviceTotals = deviceTotals,
-            appTotals = appTotals,
-            hourTotals = hourTotals
-        )
+    }
+
+    private fun hoursOn(date: LocalDate): List<HourlyDeviceUsage> {
+        return (0..23).map { hour ->
+            HourlyDeviceUsage(
+                date = date,
+                hour = hour,
+                totalUsageMillis = hourSlices.getOrDefault(date to hour, 0L),
+            )
+        }
+    }
+
+    private fun observedDay(date: LocalDate, earliest: LocalDate): Boolean {
+        return !date.isBefore(earliest) && !date.isAfter(today)
     }
 }
 
