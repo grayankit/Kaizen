@@ -2,38 +2,15 @@ package me.ankitgrai.kaizen.ui.screens
 
 import android.os.Build
 import androidx.annotation.RequiresApi
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.ArrowBack
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Slider
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
@@ -42,51 +19,38 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
-import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
 import me.ankitgrai.kaizen.data.reel.ReelApps
 import me.ankitgrai.kaizen.data.reel.ReelSetup
 import me.ankitgrai.kaizen.settings.LocalScreenTimeSettings
 import me.ankitgrai.kaizen.settings.ScreenTimeSettings
-import me.ankitgrai.kaizen.settings.formatScreenTimeTarget
-import me.ankitgrai.kaizen.settings.snapTargetMinutes
-import me.ankitgrai.kaizen.ui.components.AppIcon
 import me.ankitgrai.kaizen.ui.components.KaizenScrollItem
-import me.ankitgrai.kaizen.ui.components.roundedClickable
+import me.ankitgrai.kaizen.ui.design.BackTopBar
+import me.ankitgrai.kaizen.ui.settings.OledRow
+import me.ankitgrai.kaizen.ui.settings.ReelAppRow
+import me.ankitgrai.kaizen.ui.settings.ReelSetupBlock
+import me.ankitgrai.kaizen.ui.settings.ScreenTimeTargetDialog
+import me.ankitgrai.kaizen.ui.settings.ScreenTimeTargetRow
+import me.ankitgrai.kaizen.ui.settings.ThemeModeRow
+import me.ankitgrai.kaizen.ui.settings.ThemeOptionRow
+import me.ankitgrai.kaizen.ui.settings.WidgetOpacityRow
 import me.ankitgrai.kaizen.ui.theme.AppThemeId
 import me.ankitgrai.kaizen.ui.theme.KaizenTheme
 import me.ankitgrai.kaizen.ui.theme.LocalThemeSettings
 import me.ankitgrai.kaizen.ui.theme.ThemeSettings
-import me.ankitgrai.kaizen.ui.theme.colorScheme
-import me.ankitgrai.kaizen.ui.theme.ThemeMode
 import me.ankitgrai.kaizen.widget.WidgetSettings
 import me.ankitgrai.kaizen.widget.WidgetUpdater
-import me.ankitgrai.kaizen.widget.widgetCornerRadius
-import me.ankitgrai.kaizen.widget.widgetDayBackground
-import me.ankitgrai.kaizen.widget.widgetDayContent
-import me.ankitgrai.kaizen.widget.widgetDayMuted
-import me.ankitgrai.kaizen.widget.widgetNightBackground
-import me.ankitgrai.kaizen.widget.widgetNightContent
-import me.ankitgrai.kaizen.widget.widgetNightMuted
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
-    onBack: () -> Unit
+    onBack: () -> Unit,
 ) {
     val settings = LocalThemeSettings.current ?: return
     val screenTime = LocalScreenTimeSettings.current
@@ -105,51 +69,27 @@ fun SettingsScreen(
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
-        TopAppBar(
-            windowInsets = WindowInsets(0.dp),
-            title = { Text("Settings") },
-            navigationIcon = {
-                IconButton(onClick = onBack) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
-                        contentDescription = "Back"
-                    )
-                }
-            },
-            colors = TopAppBarDefaults.topAppBarColors(
-                containerColor = scheme.background,
-                titleContentColor = scheme.onBackground,
-                navigationIconContentColor = scheme.onBackground
-            )
-        )
+        BackTopBar(title = "Settings", onBack = onBack)
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(horizontal = 20.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(18.dp)
+            verticalArrangement = Arrangement.spacedBy(18.dp),
         ) {
             if (screenTime != null) {
                 item(key = "screen-time-heading") {
-                    Text(
-                        text = "Screen time",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold
-                    )
+                    SectionHeading("Screen time")
                 }
                 item(key = "screen-time") {
                     KaizenScrollItem(index = 0) {
                         ScreenTimeTargetRow(
                             minutes = screenTime.targetMinutes,
-                            onClick = { showTargetDialog = true }
+                            onClick = { showTargetDialog = true },
                         )
                     }
                 }
 
                 item(key = "reel-heading") {
-                    Text(
-                        text = "Reel counter",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
-                    )
+                    SectionHeading("Reel counter")
                 }
                 item(key = "reel-setup") {
                     ReelSetupBlock(
@@ -198,11 +138,7 @@ fun SettingsScreen(
             }
 
             item(key = "widgets-heading") {
-                Text(
-                    text = "Widgets",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold
-                )
+                SectionHeading("Widgets")
             }
             item(key = "widget-opacity") {
                 KaizenScrollItem(index = 0) {
@@ -212,17 +148,13 @@ fun SettingsScreen(
                             widgetOpacity = percent
                             WidgetSettings.writeOpacityPercent(context, percent)
                             WidgetUpdater.publishAppearance(context)
-                        }
+                        },
                     )
                 }
             }
 
             item(key = "appearance-heading") {
-                Text(
-                    text = "Appearance",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold
-                )
+                SectionHeading("Appearance")
             }
             item(key = "theme-mode") {
                 KaizenScrollItem(index = 1) {
@@ -235,28 +167,24 @@ fun SettingsScreen(
                 }
             }
             item(key = "theme-heading") {
-                Text(
-                    text = "Theme",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold
-                )
+                SectionHeading("Theme")
             }
             item(key = "theme-description") {
                 Text(
                     text = "Material You follows your wallpaper. The other palettes are the Dartotsu presets.",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = scheme.onSurfaceVariant
+                    color = scheme.onSurfaceVariant,
                 )
             }
             itemsIndexed(
                 items = AppThemeId.entries,
-                key = { _, theme -> theme.name }
+                key = { _, theme -> theme.name },
             ) { index, theme ->
                 KaizenScrollItem(index = index + 3) {
                     ThemeOptionRow(
                         theme = theme,
                         selected = settings.themeId == theme,
-                        onClick = { settings.selectTheme(theme) }
+                        onClick = { settings.selectTheme(theme) },
                     )
                 }
             }
@@ -271,413 +199,18 @@ fun SettingsScreen(
                 screenTime.selectTargetMinutes(minutes)
                 showTargetDialog = false
                 scope.launch { WidgetUpdater.update(context) }
-            }
-        )
-    }
-}
-
-@Composable
-private fun ScreenTimeTargetRow(
-    minutes: Int,
-    onClick: () -> Unit
-) {
-    val scheme = MaterialTheme.colorScheme
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .roundedClickable(RoundedCornerShape(16.dp), onClick = onClick)
-            .background(scheme.surfaceVariant)
-            .padding(14.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween
-    ) {
-        Column(
-            modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(2.dp)
-        ) {
-            Text(
-                text = "Maximum screen time",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold
-            )
-            Text(
-                text = "Daily target for the overview ring",
-                style = MaterialTheme.typography.bodyMedium,
-                color = scheme.onSurfaceVariant
-            )
-        }
-        Text(
-            text = formatScreenTimeTarget(minutes),
-            modifier = Modifier.padding(start = 12.dp),
-            color = scheme.primary,
-            fontWeight = FontWeight.SemiBold
-        )
-    }
-}
-
-@Composable
-private fun WidgetOpacityRow(
-    percent: Int,
-    onPercentChange: (Int) -> Unit,
-) {
-    val scheme = MaterialTheme.colorScheme
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
-            .background(scheme.surfaceVariant)
-            .padding(14.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(2.dp)
-            ) {
-                Text(
-                    text = "Background opacity",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold
-                )
-                Text(
-                    text = "Lets your wallpaper show through the widgets. Text stays solid.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = scheme.onSurfaceVariant
-                )
-            }
-            Text(
-                text = "$percent%",
-                modifier = Modifier.padding(start = 12.dp),
-                color = scheme.primary,
-                fontWeight = FontWeight.SemiBold
-            )
-        }
-        Slider(
-            value = percent.toFloat(),
-            onValueChange = { raw ->
-                val next = raw.roundToInt().coerceIn(
-                    WidgetSettings.MIN_OPACITY_PERCENT,
-                    WidgetSettings.MAX_OPACITY_PERCENT
-                )
-                if (next != percent) onPercentChange(next)
             },
-            valueRange = WidgetSettings.MIN_OPACITY_PERCENT.toFloat()..
-                WidgetSettings.MAX_OPACITY_PERCENT.toFloat(),
-            modifier = Modifier.semantics {
-                contentDescription = "Widget background opacity"
-            }
-        )
-        WidgetOpacityPreview(percent)
-    }
-}
-
-@Composable
-private fun WidgetOpacityPreview(percent: Int) {
-    val night = isSystemInDarkTheme()
-    val background = if (night) widgetNightBackground else widgetDayBackground
-    val content = if (night) widgetNightContent else widgetDayContent
-    val muted = if (night) widgetNightMuted else widgetDayMuted
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(96.dp)
-            .clip(RoundedCornerShape(16.dp))
-            .background(
-                Brush.linearGradient(
-                    listOf(
-                        Color(0xFF6C63FF),
-                        Color(0xFFB388FF),
-                        Color(0xFFFF8FAB)
-                    )
-                )
-            ),
-        contentAlignment = Alignment.Center
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth(0.62f)
-                .clip(RoundedCornerShape(widgetCornerRadius))
-                .background(background.copy(alpha = percent / 100f))
-                .padding(horizontal = 12.dp, vertical = 10.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Text(
-                text = "2h 15m",
-                color = content,
-                fontWeight = FontWeight.Bold,
-                style = MaterialTheme.typography.titleMedium
-            )
-            Text(
-                text = "of 6h",
-                color = muted,
-                style = MaterialTheme.typography.bodySmall
-            )
-        }
-    }
-}
-
-@Composable
-private fun ThemeModeRow(
-    selected: ThemeMode,
-    onSelect: (ThemeMode) -> Unit
-) {
-    val scheme = MaterialTheme.colorScheme
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        ThemeMode.entries.forEach { mode ->
-            val isSelected = selected == mode
-            Text(
-                text = mode.label,
-                color = if (isSelected) scheme.onPrimary else scheme.onSurfaceVariant,
-                modifier = Modifier
-                    .roundedClickable(RoundedCornerShape(50)) { onSelect(mode) }
-                    .background(if (isSelected) scheme.primary else scheme.surfaceVariant)
-                    .padding(horizontal = 14.dp, vertical = 8.dp)
-            )
-        }
-    }
-}
-
-@Composable
-private fun OledRow(
-    checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit
-) {
-    val scheme = MaterialTheme.colorScheme
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween
-    ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = "OLED black",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold
-            )
-            Text(
-                text = "Pure black background in dark mode",
-                style = MaterialTheme.typography.bodyMedium,
-                color = scheme.onSurfaceVariant
-            )
-        }
-        Switch(
-            checked = checked,
-            onCheckedChange = onCheckedChange
         )
     }
 }
 
 @Composable
-private fun ThemeOptionRow(
-    theme: AppThemeId,
-    selected: Boolean,
-    onClick: () -> Unit
-) {
-    val scheme = MaterialTheme.colorScheme
-    val preview = theme.previewColor()
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .roundedClickable(RoundedCornerShape(16.dp), onClick = onClick)
-            .background(if (selected) scheme.primaryContainer else scheme.surfaceVariant)
-            .padding(14.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(14.dp)
-    ) {
-        Box(
-            modifier = Modifier
-                .size(28.dp)
-                .clip(CircleShape)
-                .background(preview)
-                .border(1.dp, scheme.outline, CircleShape)
-        )
-        Text(
-            text = theme.label,
-            color = if (selected) scheme.onPrimaryContainer else scheme.onSurface,
-            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal
-        )
-    }
-}
-
-@Composable
-private fun ScreenTimeTargetDialog(
-    initialMinutes: Int,
-    onDismiss: () -> Unit,
-    onConfirm: (Int) -> Unit
-) {
-    var minutes by remember(initialMinutes) { mutableIntStateOf(initialMinutes) }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Maximum screen time") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(
-                    text = formatScreenTimeTarget(minutes),
-                    style = MaterialTheme.typography.headlineMedium,
-                    fontWeight = FontWeight.Bold
-                )
-                Text(
-                    text = "The overview ring fills as today's usage approaches this target.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Slider(
-                    value = minutes.toFloat(),
-                    onValueChange = { minutes = snapTargetMinutes(it) },
-                    valueRange = ScreenTimeSettings.MIN_TARGET_MINUTES.toFloat()..
-                        ScreenTimeSettings.MAX_TARGET_MINUTES.toFloat(),
-                    steps = ScreenTimeSettings.sliderSteps,
-                    modifier = Modifier.semantics {
-                        contentDescription = "Maximum screen time"
-                    }
-                )
-                Text(
-                    text = "${formatScreenTimeTarget(ScreenTimeSettings.MIN_TARGET_MINUTES)} to ${
-                        formatScreenTimeTarget(ScreenTimeSettings.MAX_TARGET_MINUTES)
-                    }",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = { onConfirm(minutes) }) {
-                Text("Save")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cancel")
-            }
-        }
+private fun SectionHeading(title: String) {
+    Text(
+        text = title,
+        style = MaterialTheme.typography.titleMedium,
+        fontWeight = FontWeight.SemiBold,
     )
-}
-
-@Composable
-private fun ReelSetupBlock(
-    serviceOn: Boolean,
-    onOpenAccessibility: () -> Unit,
-    onOpenBattery: () -> Unit,
-) {
-    val scheme = MaterialTheme.colorScheme
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text(
-            text = "Counts swipes while Kaizen is closed. It does not read what is on screen.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = scheme.onSurfaceVariant,
-        )
-        SettingsLinkRow(
-            title = "Accessibility service",
-            subtitle = if (serviceOn) {
-                "On"
-            } else {
-                "Off. Allow restricted settings: Apps, Kaizen, menu, then enable the service."
-            },
-            action = "Open",
-            onClick = onOpenAccessibility,
-        )
-        SettingsLinkRow(
-            title = "Battery",
-            subtitle = "Set use to Unrestricted",
-            action = "Open",
-            onClick = onOpenBattery,
-        )
-    }
-}
-
-@Composable
-private fun SettingsLinkRow(
-    title: String,
-    subtitle: String,
-    action: String,
-    onClick: () -> Unit,
-) {
-    val scheme = MaterialTheme.colorScheme
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .roundedClickable(RoundedCornerShape(16.dp), onClick = onClick)
-            .background(scheme.surfaceVariant)
-            .padding(14.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween,
-    ) {
-        Column(
-            modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(2.dp),
-        ) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-            )
-            Text(
-                text = subtitle,
-                style = MaterialTheme.typography.bodyMedium,
-                color = scheme.onSurfaceVariant,
-            )
-        }
-        Text(
-            text = action,
-            modifier = Modifier.padding(start = 12.dp),
-            color = scheme.primary,
-            fontWeight = FontWeight.SemiBold,
-        )
-    }
-}
-
-@Composable
-private fun ReelAppRow(
-    label: String,
-    packageName: String,
-    showPackage: Boolean,
-    checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit,
-) {
-    val scheme = MaterialTheme.colorScheme
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        AppIcon(
-            packageName = packageName,
-            initials = label.firstOrNull()?.uppercase() ?: "?",
-            color = scheme.primary,
-            size = 40.dp,
-        )
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = label,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-                color = scheme.onSurface,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            if (showPackage) {
-                Text(
-                    text = packageName,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = scheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-        }
-        Switch(checked = checked, onCheckedChange = onCheckedChange)
-    }
-}
-
-@Composable
-private fun AppThemeId.previewColor() = when (this) {
-    AppThemeId.Material -> MaterialTheme.colorScheme.primary
-    else -> colorScheme(dark = true).primary
 }
 
 @RequiresApi(Build.VERSION_CODES.S)
@@ -689,7 +222,7 @@ private fun SettingsScreenPreview() {
     val screenTimeSettings = remember { ScreenTimeSettings(context) }
     CompositionLocalProvider(
         LocalThemeSettings provides themeSettings,
-        LocalScreenTimeSettings provides screenTimeSettings
+        LocalScreenTimeSettings provides screenTimeSettings,
     ) {
         KaizenTheme(dynamicColor = false) {
             SettingsScreen(onBack = {})

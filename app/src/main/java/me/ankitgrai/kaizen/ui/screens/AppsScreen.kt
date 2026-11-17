@@ -1,35 +1,47 @@
 package me.ankitgrai.kaizen.ui.screens
 
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.runtime.*
-import kotlinx.coroutines.launch
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleEventObserver
-import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.compose.LifecycleEventEffect
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import kotlinx.coroutines.launch
+import me.ankitgrai.kaizen.domain.formatDuration
 import me.ankitgrai.kaizen.ui.components.AppSearchBar
-import me.ankitgrai.kaizen.ui.components.KaizenPullToRefresh
 import me.ankitgrai.kaizen.ui.components.AppUsageRow
-import me.ankitgrai.kaizen.ui.components.KaizenScrollItem
 import me.ankitgrai.kaizen.ui.components.CategoryFilter
+import me.ankitgrai.kaizen.ui.components.KaizenPullToRefresh
+import me.ankitgrai.kaizen.ui.components.KaizenScrollItem
+import me.ankitgrai.kaizen.ui.design.CenteredProgress
+import me.ankitgrai.kaizen.ui.design.PromptMessage
+import me.ankitgrai.kaizen.ui.design.ScreenHeader
+import me.ankitgrai.kaizen.ui.design.TabScreenPadding
 import me.ankitgrai.kaizen.ui.theme.KaizenTheme
 import me.ankitgrai.kaizen.viewmodel.UsageViewModel
 
@@ -57,23 +69,12 @@ fun AppsScreen(
     var sortMenuExpanded by remember {
         mutableStateOf(false)
     }
-    val uiState by usageViewModel.uiState.collectAsState()
-    val isRefreshing by usageViewModel.isRefreshing.collectAsState()
+    val uiState by usageViewModel.uiState.collectAsStateWithLifecycle()
+    val isRefreshing by usageViewModel.isRefreshing.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
-    val lifecycleOwner = LocalLifecycleOwner.current
 
-    DisposableEffect(lifecycleOwner, usageViewModel) {
-        val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME) {
-                usageViewModel.refresh()
-            }
-        }
-
-        lifecycleOwner.lifecycle.addObserver(observer)
-
-        onDispose {
-            lifecycleOwner.lifecycle.removeObserver(observer)
-        }
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
+        usageViewModel.refresh()
     }
 
     val filteredApps = remember(
@@ -111,37 +112,21 @@ fun AppsScreen(
     ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(
-            start = 20.dp,
-            end = 20.dp,
-            top = 24.dp,
-            bottom = 120.dp
-        ),
+        contentPadding = TabScreenPadding,
         verticalArrangement = Arrangement.spacedBy(18.dp)
     ) {
         item {
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text(
-                    text = "Applications",
-                    color = MaterialTheme.colorScheme.onSurface,
-                    fontSize = 25.sp,
-                    fontWeight = FontWeight.Bold
-                )
-                Text(
-                    text = "Understand where your time goes.",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontSize = 12.sp
-                )
-            }
+            ScreenHeader(
+                title = "Applications",
+                subtitle = "Understand where your time goes.",
+            )
         }
 
         item {
             UsageSummaryCard(
-                totalUsageMillis = uiState.totalUsageMills,
+                totalUsageMillis = uiState.totalUsageMillis,
                 yesterdayUsageMillis = uiState.yesterdayUsageMillis,
-                appsUsed = uiState.installedApps.count {
-                    it.duration != "0m"
-                }
+                appsUsed = uiState.installedApps.count { it.totalUsageMillis > 0L },
             )
         }
 
@@ -195,38 +180,24 @@ fun AppsScreen(
 
         when {
             !uiState.hasUsageAccess && !uiState.isLoading -> item {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text(
-                        text = "Usage access is required to display app screen time.",
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Button(onClick = { usageViewModel.openUsageAccessSettings() }) {
-                        Text("Grant usage access")
-                    }
-                }
+                PromptMessage(
+                    message = "Usage access is required to display app screen time.",
+                    actionLabel = "Grant usage access",
+                    onAction = { usageViewModel.openUsageAccessSettings() },
+                )
             }
 
             uiState.isLoading && uiState.installedApps.isEmpty() -> item {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 32.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    CircularProgressIndicator()
-                }
+                CenteredProgress(modifier = Modifier.padding(vertical = 32.dp))
             }
 
             uiState.error != null && uiState.installedApps.isEmpty() -> item {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text(
-                        text = uiState.error ?: "Unable to load applications.",
-                        color = MaterialTheme.colorScheme.error
-                    )
-                    Button(onClick = { usageViewModel.refresh() }) {
-                        Text("Retry")
-                    }
-                }
+                PromptMessage(
+                    message = uiState.error ?: "Unable to load applications.",
+                    actionLabel = "Retry",
+                    onAction = { usageViewModel.refresh() },
+                    isError = true,
+                )
             }
 
             filteredApps.isEmpty() -> item {
@@ -267,11 +238,7 @@ private fun UsageSummaryCard(
     yesterdayUsageMillis: Long?,
     appsUsed: Int
 ) {
-    val totalMinutes = totalUsageMillis / 60_000L
-    val hours = totalMinutes / 60
-    val minutes = totalMinutes % 60
-
-    val formattedUsage = "${hours}h ${minutes}m"
+    val formattedUsage = formatDuration(totalUsageMillis, alwaysShowHours = true)
     val comparison = remember(totalUsageMillis, yesterdayUsageMillis) {
         usageComparison(totalUsageMillis, yesterdayUsageMillis)
     }

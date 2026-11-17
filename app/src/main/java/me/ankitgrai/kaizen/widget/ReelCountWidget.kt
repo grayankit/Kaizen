@@ -12,7 +12,6 @@ import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.SizeMode
 import androidx.glance.appwidget.action.actionStartActivity
 import androidx.glance.appwidget.provideContent
-import androidx.glance.color.ColorProvider
 import androidx.glance.layout.Alignment
 import androidx.glance.layout.Box
 import androidx.glance.layout.Column
@@ -20,10 +19,8 @@ import androidx.glance.layout.Spacer
 import androidx.glance.layout.fillMaxSize
 import androidx.glance.layout.height
 import androidx.glance.layout.padding
-import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
 import androidx.glance.text.TextAlign
-import androidx.glance.text.TextStyle
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import me.ankitgrai.kaizen.MainActivity
@@ -97,23 +94,5 @@ private fun ReelCountWidgetContent(
     }
 }
 
-private val titleColor = ColorProvider(
-    day = widgetDayContent,
-    night = widgetNightContent,
-)
-private val labelColor = ColorProvider(
-    day = widgetDayMuted,
-    night = widgetNightMuted,
-)
-private val titleStyle = TextStyle(
-    color = titleColor,
-    fontSize = 28.sp,
-    fontWeight = FontWeight.Bold,
-    textAlign = TextAlign.Center,
-)
-private val labelStyle = TextStyle(
-    color = labelColor,
-    fontSize = 13.sp,
-    fontWeight = FontWeight.Medium,
-    textAlign = TextAlign.Center,
-)
+private val titleStyle = widgetTitleStyle(28.sp, TextAlign.Center)
+private val labelStyle = widgetLabelStyle(TextAlign.Center)

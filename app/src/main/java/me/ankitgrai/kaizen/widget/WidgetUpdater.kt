@@ -19,7 +19,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import me.ankitgrai.kaizen.data.usage.UsageRepository
+import me.ankitgrai.kaizen.AppGraph
 import kotlin.time.Duration.Companion.milliseconds
 
 object WidgetUpdater {
@@ -160,7 +160,7 @@ class WidgetRefreshWorker(
             WidgetUpdater.cancelRefresh(applicationContext)
             return Result.success()
         }
-        val repository = UsageRepository(applicationContext)
+        val repository = AppGraph.usageRepository(applicationContext)
         if (repository.hasUsageAccess()) {
             runCatching {
                 repository.refreshUsage(force = true, publishWidget = false)

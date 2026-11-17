@@ -105,6 +105,7 @@ fun AppNavigation(){
             }
             composable (Routes.OVERVIEW){
                 OverviewScreen(
+                    usageViewModel = usageViewModel,
                     onAppClick = { packageName ->
                         navController.navigate(
                             "app_details/${Uri.encode(packageName)}"
@@ -119,7 +120,10 @@ fun AppNavigation(){
                 )
             }
             composable(Routes.REELS) {
-                ReelDetailScreen(onBack = { navController.popBackStack() })
+                ReelDetailScreen(
+                    onBack = { navController.popBackStack() },
+                    usageViewModel = usageViewModel,
+                )
             }
             composable(Routes.SETTINGS) {
                 SettingsScreen(
@@ -157,7 +161,7 @@ fun AppNavigation(){
                 )
             }
             composable (Routes.HISTORY){
-                HistoryScreen()
+                HistoryScreen(usageViewModel = usageViewModel)
             }
         }
         if (showNavigationBar) {

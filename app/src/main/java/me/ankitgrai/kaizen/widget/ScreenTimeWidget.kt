@@ -20,7 +20,6 @@ import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.SizeMode
 import androidx.glance.appwidget.action.actionStartActivity
 import androidx.glance.appwidget.provideContent
-import androidx.glance.color.ColorProvider
 import androidx.glance.layout.Alignment
 import androidx.glance.layout.Box
 import androidx.glance.layout.Column
@@ -30,17 +29,14 @@ import androidx.glance.layout.fillMaxSize
 import androidx.glance.layout.height
 import androidx.glance.layout.padding
 import androidx.glance.layout.size
-import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
 import androidx.glance.text.TextAlign
-import androidx.glance.text.TextStyle
-import java.time.LocalDate
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import me.ankitgrai.kaizen.AppGraph
 import me.ankitgrai.kaizen.MainActivity
 import me.ankitgrai.kaizen.R
-import me.ankitgrai.kaizen.data.local.KaizenDatabase
-import me.ankitgrai.kaizen.data.usage.UsageRepository
+import me.ankitgrai.kaizen.domain.formatDuration
 import me.ankitgrai.kaizen.settings.ScreenTimeSettings
 import me.ankitgrai.kaizen.settings.formatScreenTimeTarget
 
@@ -81,26 +77,19 @@ private data class WidgetSnapshot(
 }
 
 private suspend fun loadSnapshot(context: Context): WidgetSnapshot {
-    val repository = UsageRepository(context)
+    val repository = AppGraph.usageRepository(context)
     val targetMillis = ScreenTimeSettings.readTargetMillis(context)
     if (!repository.hasUsageAccess()) {
         return WidgetSnapshot(
             hasAccess = false,
             totalMillis = 0L,
-            targetMillis = targetMillis
+            targetMillis = targetMillis,
         )
     }
-    val today = LocalDate.now().toString()
-    val total = KaizenDatabase.get(context)
-        .usageHistoryDao()
-        .deviceUsageBetween(today, today)
-        .firstOrNull()
-        ?.totalUsageMillis
-        ?: 0L
     return WidgetSnapshot(
         hasAccess = true,
-        totalMillis = total,
-        targetMillis = targetMillis
+        totalMillis = repository.todayDeviceUsageMillis(),
+        targetMillis = targetMillis,
     )
 }
 
@@ -161,7 +150,7 @@ private fun ScreenTimeWidgetBody(
                 Spacer(modifier = GlanceModifier.height(6.dp))
             }
             Text(
-                text = formatWidgetDuration(snapshot.totalMillis),
+                text = formatDuration(snapshot.totalMillis),
                 style = titleStyle
             )
             Text(
@@ -169,17 +158,6 @@ private fun ScreenTimeWidgetBody(
                 style = labelStyle
             )
         }
-    }
-}
-
-private fun formatWidgetDuration(milliseconds: Long): String {
-    val totalMinutes = milliseconds / 60_000L
-    val hours = totalMinutes / 60
-    val minutes = totalMinutes % 60
-    return if (hours > 0) {
-        "${hours}h ${minutes}m"
-    } else {
-        "${minutes}m"
     }
 }
 
@@ -213,27 +191,6 @@ private fun usageRingBitmap(progress: Float, sizePx: Int = 192): Bitmap {
 }
 
 private val RING_COLOR = Color(0xFFB39DFF)
-private val titleColor = ColorProvider(
-    day = widgetDayContent,
-    night = widgetNightContent,
-)
-private val labelColor = ColorProvider(
-    day = widgetDayMuted,
-    night = widgetNightMuted,
-)
-private val titleStyle = TextStyle(
-    color = titleColor,
-    fontSize = 22.sp,
-    fontWeight = FontWeight.Bold
-)
-private val labelStyle = TextStyle(
-    color = labelColor,
-    fontSize = 13.sp,
-    fontWeight = FontWeight.Medium
-)
-private val messageStyle = TextStyle(
-    color = titleColor,
-    fontSize = 16.sp,
-    fontWeight = FontWeight.Bold,
-    textAlign = TextAlign.Center
-)
+private val titleStyle = widgetTitleStyle(22.sp)
+private val labelStyle = widgetLabelStyle()
+private val messageStyle = widgetTitleStyle(16.sp, TextAlign.Center)

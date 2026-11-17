@@ -12,9 +12,11 @@ import me.ankitgrai.kaizen.data.local.DailyAppUsageEntity
 import me.ankitgrai.kaizen.data.local.DailyDeviceUsageEntity
 import me.ankitgrai.kaizen.data.local.HourlyDeviceUsageEntity
 import me.ankitgrai.kaizen.data.local.KaizenDatabase
-import me.ankitgrai.kaizen.widget.WidgetUpdater
 
-class UsageRepository (context: Context){
+class UsageRepository internal constructor(
+    context: Context,
+    private val onUsageChanged: (Context) -> Unit = {},
+) {
     private val appContext = context.applicationContext
     private val dataSource = UsageStateDataSource(
         context.applicationContext
@@ -84,11 +86,12 @@ class UsageRepository (context: Context){
                 end.toString()
             ).associateBy { it.date }
             deviceDays.map { device ->
-                DailyAppUsage(
-                    date = LocalDate.parse(device.date),
-                    packageName = packageName,
-                    totalTimeInForeground = appDays[device.date]?.totalUsageMillis ?: 0L
-                )
+                appDays[device.date]?.toDailyAppUsage()
+                    ?: DailyAppUsage(
+                        date = LocalDate.parse(device.date),
+                        packageName = packageName,
+                        totalTimeInForeground = 0L,
+                    )
             }
         }
     }
@@ -101,26 +104,23 @@ class UsageRepository (context: Context){
             val end = LocalDate.now()
             val start = end.minusDays((days - 1).toLong())
             historyDao.deviceUsageBetween(start.toString(), end.toString())
-                .map {
-                    DailyDeviceUsage(
-                        date = LocalDate.parse(it.date),
-                        totalUsageMillis = it.totalUsageMillis
-                    )
-                }
+                .map { it.toDailyDeviceUsage() }
         }
     }
 
     suspend fun getHourlyDeviceUsage(date: LocalDate): List<HourlyDeviceUsage> {
         return withContext(Dispatchers.IO) {
             refreshUsage()
-            historyDao.hoursOnDate(date.toString()).map {
-                HourlyDeviceUsage(
-                    date = date,
-                    hour = it.hour,
-                    totalUsageMillis = it.totalUsageMillis
-                )
-            }
+            historyDao.hoursOnDate(date.toString()).map { it.toHourlyDeviceUsage() }
         }
+    }
+
+    suspend fun todayDeviceUsageMillis(): Long = withContext(Dispatchers.IO) {
+        val today = LocalDate.now().toString()
+        historyDao.deviceUsageBetween(today, today)
+            .firstOrNull()
+            ?.totalUsageMillis
+            ?: 0L
     }
 
     suspend fun getTopAppsForDate(date: LocalDate): List<AppUsageInfo> {
@@ -252,7 +252,7 @@ class UsageRepository (context: Context){
                 cachedToday
             }
             if (publishWidget) {
-                WidgetUpdater.publish(appContext)
+                onUsageChanged(appContext)
             }
             usage
         }

@@ -1,74 +1,33 @@
 package me.ankitgrai.kaizen.viewmodel
 
 import android.app.Application
-import androidx.compose.ui.graphics.Color
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import java.time.LocalDate
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import me.ankitgrai.kaizen.AppGraph
 import me.ankitgrai.kaizen.data.reel.DailyReelCount
 import me.ankitgrai.kaizen.data.reel.ReelRepository
 import me.ankitgrai.kaizen.data.usage.AppUsageInfo
-import me.ankitgrai.kaizen.data.usage.DailyAppUsage
-import me.ankitgrai.kaizen.data.usage.DailyDeviceUsage
-import me.ankitgrai.kaizen.data.usage.HourlyDeviceUsage
-import me.ankitgrai.kaizen.data.usage.InstalledAppInfo
-import me.ankitgrai.kaizen.data.usage.UsageRepository
 import me.ankitgrai.kaizen.ui.components.AppUsage
-import java.time.LocalDate
+import me.ankitgrai.kaizen.ui.mapping.toAppUsage
+import me.ankitgrai.kaizen.ui.mapping.toUnusedApp
 
-data class UsageUiState(
-    val isLoading: Boolean = false,
-    val hasUsageAccess: Boolean = false,
-    val apps: List<AppUsage> = emptyList(),
-    val installedApps: List<AppUsage> = emptyList(),
-    val totalUsageMills: Long = 0L,
-    val yesterdayUsageMillis: Long? = null,
-    val error: String? = null
-)
-data class AppDetailsUiState(
-    val isLoading: Boolean = false,
-    val history: List<DailyAppUsage> = emptyList(),
-    val error: String? = null
-)
-
-data class DayAppsUiState(
-    val date: LocalDate? = null,
-    val isLoading: Boolean = false,
-    val apps: List<AppUsage> = emptyList()
-)
-
-data class PeriodAppsUiState(
-    val startDate: LocalDate? = null,
-    val endDate: LocalDate? = null,
-    val isLoading: Boolean = false,
-    val apps: List<AppUsage> = emptyList()
-)
-
-data class HistoryUiState(
-    val isLoading: Boolean = false,
-    val days: List<DailyDeviceUsage> = emptyList(),
-    val error: String? = null
-)
-
-data class DayHoursUiState(
-    val date: LocalDate? = null,
-    val isLoading: Boolean = false,
-    val hours: List<HourlyDeviceUsage> = emptyList(),
-    val available: Boolean = false
-)
 class UsageViewModel(
-    application: Application
-): AndroidViewModel(application){
-    private val repository = UsageRepository(application)
+    application: Application,
+) : AndroidViewModel(application) {
+    private val repository = AppGraph.usageRepository(application)
     private val reelRepository = ReelRepository(application)
     private var enabledReelApps: Set<String> = emptySet()
 
     private val _uiState = MutableStateFlow(UsageUiState())
+    val uiState: StateFlow<UsageUiState> = _uiState.asStateFlow()
 
     private val _appDetailsState = MutableStateFlow(AppDetailsUiState())
+    val appDetailsState: StateFlow<AppDetailsUiState> = _appDetailsState.asStateFlow()
 
     private val _dayAppsState = MutableStateFlow(DayAppsUiState())
     val dayAppsState: StateFlow<DayAppsUiState> = _dayAppsState.asStateFlow()
@@ -77,6 +36,7 @@ class UsageViewModel(
     val periodAppsState: StateFlow<PeriodAppsUiState> = _periodAppsState.asStateFlow()
 
     private val _historyState = MutableStateFlow(HistoryUiState())
+    val historyState: StateFlow<HistoryUiState> = _historyState.asStateFlow()
 
     private val _dayHoursState = MutableStateFlow(DayHoursUiState())
     val dayHoursState: StateFlow<DayHoursUiState> = _dayHoursState.asStateFlow()
@@ -86,12 +46,6 @@ class UsageViewModel(
 
     private val _reelHistory = MutableStateFlow<List<DailyReelCount>>(emptyList())
     val reelHistory: StateFlow<List<DailyReelCount>> = _reelHistory.asStateFlow()
-
-    val historyState: StateFlow<HistoryUiState> =
-        _historyState.asStateFlow()
-    val appDetailsState: StateFlow<AppDetailsUiState> =
-        _appDetailsState.asStateFlow()
-    val uiState: StateFlow<UsageUiState> = _uiState.asStateFlow()
 
     private val _isRefreshing = MutableStateFlow(false)
     val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
@@ -105,36 +59,6 @@ class UsageViewModel(
     fun refreshReel(enabledApps: Set<String>) {
         enabledReelApps = enabledApps
         viewModelScope.launch { refreshReelNow() }
-    }
-
-    private suspend fun refreshReelNow() {
-        val enabledApps = enabledReelApps
-        runCatching {
-            _reelCountToday.value = reelRepository.todayTotal(enabledApps)
-            _reelHistory.value = reelRepository.last7Days(enabledApps)
-        }
-    }
-
-    fun loadDayHours(date: LocalDate) {
-        viewModelScope.launch {
-            _dayHoursState.value = DayHoursUiState(date = date, isLoading = true)
-            try {
-                val hours = repository.getHourlyDeviceUsage(date)
-                if (_dayHoursState.value.date != date) return@launch
-                _dayHoursState.value = DayHoursUiState(
-                    date = date,
-                    isLoading = false,
-                    hours = hours,
-                    available = hours.isNotEmpty()
-                )
-            } catch (_: Exception) {
-                if (_dayHoursState.value.date != date) return@launch
-                _dayHoursState.value = DayHoursUiState(
-                    date = date,
-                    isLoading = false
-                )
-            }
-        }
     }
 
     fun refreshHistory(force: Boolean = false, days: Int = 90) {
@@ -155,188 +79,40 @@ class UsageViewModel(
         }
     }
 
-    private suspend fun refreshToday(force: Boolean) {
-            val hasAccess  = repository.hasUsageAccess()
-            if(!hasAccess){
-                _uiState.value = UsageUiState(
-                    hasUsageAccess = false,
-                    error = "Usage access is required."
-                )
-                return
-            }
-            val hasContent = _uiState.value.apps.isNotEmpty() ||
-                _uiState.value.installedApps.isNotEmpty()
-            _uiState.value = _uiState.value.copy(
-                isLoading = !hasContent,
-                hasUsageAccess = true,
-                error = null
-            )
-            try {
-                val usage = repository.refreshUsage(force)
-                val installed = repository.getInstalledApps()
-                val usageDays = repository.getDailyDeviceUsage(days = 2)
-                val today = LocalDate.now()
-                val screenTime = usageDays
-                    .firstOrNull { it.date == today }
-                    ?.totalUsageMillis
-                    ?: 0L
-                val yesterdayUsage = usageDays
-                    .firstOrNull { it.date == today.minusDays(1) }
-                    ?.totalUsageMillis
-
-                val usageByPackage = usage.associateBy {
-                    it.packageName
-                }
-
-                val totalUsage = screenTime.coerceAtLeast(1L)
-
-                val usedApps = usage
-                    .filter { it.totalTimeInForeground > 0L}
-                    .map { it.toAppUsage(totalUsage) }
-                    .sortedByDescending {
-                        it.totalUsageMillis
-                    }
-                val allApps = installed
-                    .map { app->
-                        val appUsage  =usageByPackage[app.packageName]
-
-                        appUsage?.copy(appName = app.appName)?.toAppUsage(totalUsage) ?: app.toUnusedApp()
-                    }
-                    .sortedWith(
-                        compareByDescending < AppUsage>{
-                            usageByPackage[it.packageName]?.totalTimeInForeground ?: 0L
-                        }.thenBy {
-                            it.name.lowercase()
-                        }
-                    )
-                _uiState.value = UsageUiState(
-                    isLoading = false,
-                    hasUsageAccess = true,
-                    apps = usedApps,
-                    installedApps = allApps,
-                    totalUsageMills = screenTime,
-                    yesterdayUsageMillis = yesterdayUsage
-                )
-            } catch (exception: Exception){
-                _uiState.value = _uiState.value.copy(
-                    isLoading = false,
-                    error = exception.message?:"Unable to load usage data."
-                )
-            }
-    }
-
-    private suspend fun refreshHistoryNow(force: Boolean, days: Int = 90) {
-            _historyState.value = _historyState.value.copy(
-                isLoading = _historyState.value.days.isEmpty(),
-                error = null
-            )
-
-            try {
-                _historyState.value = HistoryUiState(
-                    isLoading = false,
-                    days = repository.getDailyDeviceUsage(days, force)
-                )
-            } catch (exception: Exception) {
-                _historyState.value = _historyState.value.copy(
-                    isLoading = false,
-                    error = exception.message
-                        ?: "Unable to load usage history."
-                )
-            }
-    }
-    private fun AppUsageInfo.toAppUsage(totalDailyUsage: Long): AppUsage{
-        val colors = listOf(
-            Color(0xFFFF8178),
-            Color(0xFFC49BFF),
-            Color(0xFF8CB8FF),
-            Color(0xFFA6D989),
-            Color(0xFFFFC078)
-        )
-
-        val initials = appName
-            .split(" ")
-            .filter { it.isNotBlank() }
-            .take(2)
-            .joinToString("") { it.first().uppercase() }
-
-        val progress = if (totalDailyUsage > 0L) {
-            totalTimeInForeground.toFloat() / totalDailyUsage
-        } else {
-            0f
-        }
-
-        return AppUsage(
-            name = appName,
-            category = categorizedApp(packageName,appName),
-            duration = formatDuration(totalTimeInForeground),
-            initials  = initials.ifBlank { "?" },
-            color = colors[(packageName.hashCode() and Int.MAX_VALUE) % colors.size],
-            usageProgress = progress.coerceIn(0f,1f),
-            packageName = packageName,
-            totalUsageMillis = totalTimeInForeground
-        )
-    }
-    private fun InstalledAppInfo.toUnusedApp(): AppUsage{
-        val colors = listOf(
-            Color(0xFFFF8178),
-            Color(0xFFC49BFF),
-            Color(0xFF8CB8FF),
-            Color(0xFFA6D989),
-            Color(0xFFFFC078)
-        )
-
-        val initials = appName
-            .split(" ")
-            .filter { it.isNotBlank() }
-            .take(2)
-            .joinToString ("") {
-                it.first().uppercase()
-            }
-        return AppUsage(
-            name = appName,
-            category = categorizedApp(packageName,appName),
-            duration = "0m",
-            initials = initials.ifBlank { "?" },
-            color = colors[
-                (packageName.hashCode() and Int.MAX_VALUE) % colors.size
-            ],
-            usageProgress = 0f,
-            packageName = packageName
-        )
-    }
-    private fun formatDuration(milliseconds: Long): String{
-        val totalMinutes = milliseconds/60_000L
-        val hours = totalMinutes / 60
-        val minutes = totalMinutes % 60
-
-        return if(hours > 0){
-            "${hours}h ${minutes}m"
-        }else{
-            "${minutes}m"
-        }
-    }
-    fun openUsageAccessSettings(){
+    fun openUsageAccessSettings() {
         repository.openUsageAccessSettings()
+    }
+
+    fun loadDayHours(date: LocalDate) {
+        viewModelScope.launch {
+            _dayHoursState.value = DayHoursUiState(date = date, isLoading = true)
+            try {
+                val hours = repository.getHourlyDeviceUsage(date)
+                if (_dayHoursState.value.date != date) return@launch
+                _dayHoursState.value = DayHoursUiState(
+                    date = date,
+                    isLoading = false,
+                    hours = hours,
+                    available = hours.isNotEmpty(),
+                )
+            } catch (_: Exception) {
+                if (_dayHoursState.value.date != date) return@launch
+                _dayHoursState.value = DayHoursUiState(date = date, isLoading = false)
+            }
+        }
     }
 
     fun loadMostUsed(date: LocalDate, limit: Int = 5) {
         viewModelScope.launch {
-            _dayAppsState.value = _dayAppsState.value.copy(
-                date = date,
-                isLoading = true
-            )
+            _dayAppsState.value = _dayAppsState.value.copy(date = date, isLoading = true)
             try {
-                val apps = repository.getTopAppsForDate(date)
-                val total = apps.sumOf { it.totalTimeInForeground }.coerceAtLeast(1L)
-                _dayAppsState.value = DayAppsUiState(
-                    date = date,
-                    apps = apps
-                        .map { it.toAppUsage(total) }
-                        .sortedByDescending { it.totalUsageMillis }
-                        .take(limit)
-                )
+                val apps = topApps(date, date, limit)
+                if (_dayAppsState.value.date != date) return@launch
+                _dayAppsState.value = DayAppsUiState(date = date, apps = apps)
             } catch (_: Exception) {
-                _dayAppsState.value = DayAppsUiState(date = date)
+                if (_dayAppsState.value.date == date) {
+                    _dayAppsState.value = DayAppsUiState(date = date)
+                }
             }
         }
     }
@@ -344,105 +120,155 @@ class UsageViewModel(
     fun loadMostUsedForPeriod(
         startDate: LocalDate,
         endDate: LocalDate,
-        limit: Int = 5
+        limit: Int = 5,
     ) {
         viewModelScope.launch {
             _periodAppsState.value = PeriodAppsUiState(
                 startDate = startDate,
                 endDate = endDate,
-                isLoading = true
+                isLoading = true,
             )
             try {
-                val apps = repository.getTopAppsBetween(startDate, endDate)
-                val total = apps.sumOf { it.totalTimeInForeground }.coerceAtLeast(1L)
-                if (
-                    _periodAppsState.value.startDate != startDate ||
-                    _periodAppsState.value.endDate != endDate
-                ) return@launch
+                val apps = topApps(startDate, endDate, limit)
+                if (!isCurrentPeriod(startDate, endDate)) return@launch
                 _periodAppsState.value = PeriodAppsUiState(
                     startDate = startDate,
                     endDate = endDate,
-                    apps = apps
-                        .map { it.toAppUsage(total) }
-                        .sortedByDescending { it.totalUsageMillis }
-                        .take(limit)
+                    apps = apps,
                 )
             } catch (_: Exception) {
-                if (
-                    _periodAppsState.value.startDate == startDate &&
-                    _periodAppsState.value.endDate == endDate
-                ) {
+                if (isCurrentPeriod(startDate, endDate)) {
                     _periodAppsState.value = PeriodAppsUiState(
                         startDate = startDate,
-                        endDate = endDate
+                        endDate = endDate,
                     )
                 }
             }
         }
     }
 
-    fun loadAppDetails(packageName: String){
+    fun loadAppDetails(packageName: String) {
         viewModelScope.launch {
             _appDetailsState.value = _appDetailsState.value.copy(
                 isLoading = _appDetailsState.value.history.isEmpty(),
-                error = null
+                error = null,
             )
-
             try {
-                val history = repository.getAppUsageHistory(
-                    packageName,
-                    7
-                )
                 _appDetailsState.value = AppDetailsUiState(
-                    false,
-                    history
+                    isLoading = false,
+                    history = repository.getAppUsageHistory(packageName, 7),
                 )
             } catch (exception: Exception) {
                 _appDetailsState.value = _appDetailsState.value.copy(
                     isLoading = false,
-                    error = exception.message ?: "Unable to load app usage history."
+                    error = exception.message ?: "Unable to load app usage history.",
                 )
             }
         }
     }
-    private fun categorizedApp(
-        packageName: String,
-        appName: String
-    ): String{
-        val id = "$packageName $appName".lowercase()
 
-        return when {
-            listOf(
-                "instagram", "discord", "whatsapp", "telegram",
-                "facebook", "messenger", "snapchat", "reddit",
-                "signal", "threads", "x.android"
-            ).any { it in id } -> "Social"
-
-            listOf(
-                "youtube", "netflix", "twitch", "primevideo",
-                "hotstar", "video", "vlc", "mxplayer",
-                "crunchyroll", "morphe"
-            ).any { it in id } -> "Video"
-
-            listOf(
-                "spotify", "music", "soundcloud", "deezer",
-                "gaana", "jiosaavn", "podcast"
-            ).any { it in id } -> "Music"
-
-            listOf(
-                "genshin", "minecraft", "roblox", "game",
-                "pubg", "freefire", "clashofclans",
-                "playstation", "xbox"
-            ).any { it in id } -> "Games"
-
-            listOf(
-                "vscode", "visual.studio", "notion",
-                "office", "docs", "sheets", "slack",
-                "github", "gitlab", "trello", "evernote"
-            ).any { it in id } -> "Work"
-
-            else -> "Other"
+    private suspend fun refreshReelNow() {
+        val enabledApps = enabledReelApps
+        runCatching {
+            _reelCountToday.value = reelRepository.todayTotal(enabledApps)
+            _reelHistory.value = reelRepository.last7Days(enabledApps)
         }
     }
 
+    private suspend fun refreshToday(force: Boolean) {
+        val hasAccess = repository.hasUsageAccess()
+        if (!hasAccess) {
+            _uiState.value = UsageUiState(
+                hasUsageAccess = false,
+                error = "Usage access is required.",
+            )
+            return
+        }
+        val hasContent = _uiState.value.apps.isNotEmpty() ||
+            _uiState.value.installedApps.isNotEmpty()
+        _uiState.value = _uiState.value.copy(
+            isLoading = !hasContent,
+            hasUsageAccess = true,
+            error = null,
+        )
+        try {
+            val usage = repository.refreshUsage(force)
+            val installed = repository.getInstalledApps()
+            val usageDays = repository.getDailyDeviceUsage(days = 2)
+            val today = LocalDate.now()
+            val screenTime = usageDays
+                .firstOrNull { it.date == today }
+                ?.totalUsageMillis
+                ?: 0L
+            val yesterdayUsage = usageDays
+                .firstOrNull { it.date == today.minusDays(1) }
+                ?.totalUsageMillis
+            val usageByPackage = usage.associateBy { it.packageName }
+            val totalUsage = screenTime.coerceAtLeast(1L)
+            val usedApps = usage
+                .filter { it.totalTimeInForeground > 0L }
+                .map { it.toAppUsage(totalUsage) }
+                .sortedByDescending { it.totalUsageMillis }
+            val allApps = installed
+                .map { app ->
+                    val appUsage = usageByPackage[app.packageName]
+                    appUsage?.copy(appName = app.appName)?.toAppUsage(totalUsage)
+                        ?: app.toUnusedApp()
+                }
+                .sortedWith(
+                    compareByDescending<AppUsage> {
+                        usageByPackage[it.packageName]?.totalTimeInForeground ?: 0L
+                    }.thenBy { it.name.lowercase() },
+                )
+            _uiState.value = UsageUiState(
+                isLoading = false,
+                hasUsageAccess = true,
+                apps = usedApps,
+                installedApps = allApps,
+                totalUsageMillis = screenTime,
+                yesterdayUsageMillis = yesterdayUsage,
+            )
+        } catch (exception: Exception) {
+            _uiState.value = _uiState.value.copy(
+                isLoading = false,
+                error = exception.message ?: "Unable to load usage data.",
+            )
+        }
+    }
+
+    private suspend fun refreshHistoryNow(force: Boolean, days: Int = 90) {
+        _historyState.value = _historyState.value.copy(
+            isLoading = _historyState.value.days.isEmpty(),
+            error = null,
+        )
+        try {
+            _historyState.value = HistoryUiState(
+                isLoading = false,
+                days = repository.getDailyDeviceUsage(days, force),
+            )
+        } catch (exception: Exception) {
+            _historyState.value = _historyState.value.copy(
+                isLoading = false,
+                error = exception.message ?: "Unable to load usage history.",
+            )
+        }
+    }
+
+    private suspend fun topApps(
+        start: LocalDate,
+        end: LocalDate,
+        limit: Int,
+    ): List<AppUsage> {
+        val apps = repository.getTopAppsBetween(start, end)
+        val total = apps.sumOf(AppUsageInfo::totalTimeInForeground).coerceAtLeast(1L)
+        return apps
+            .map { it.toAppUsage(total) }
+            .sortedByDescending { it.totalUsageMillis }
+            .take(limit)
+    }
+
+    private fun isCurrentPeriod(startDate: LocalDate, endDate: LocalDate): Boolean {
+        return _periodAppsState.value.startDate == startDate &&
+            _periodAppsState.value.endDate == endDate
+    }
 }
