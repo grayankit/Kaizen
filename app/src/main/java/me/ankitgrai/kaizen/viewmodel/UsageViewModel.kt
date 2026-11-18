@@ -5,13 +5,19 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import java.time.LocalDate
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import me.ankitgrai.kaizen.AppGraph
+import me.ankitgrai.kaizen.data.local.CustomCategoryEntity
 import me.ankitgrai.kaizen.data.reel.DailyReelCount
 import me.ankitgrai.kaizen.data.reel.ReelRepository
 import me.ankitgrai.kaizen.data.usage.AppUsageInfo
+import me.ankitgrai.kaizen.domain.AppCategory
+import me.ankitgrai.kaizen.domain.categorizeApp
 import me.ankitgrai.kaizen.ui.components.AppUsage
 import me.ankitgrai.kaizen.ui.mapping.toAppUsage
 import me.ankitgrai.kaizen.ui.mapping.toUnusedApp
@@ -21,10 +27,49 @@ class UsageViewModel(
 ) : AndroidViewModel(application) {
     private val repository = AppGraph.usageRepository(application)
     private val reelRepository = ReelRepository(application)
+    private val categoryRepository = AppGraph.categoryRepository(application)
     private var enabledReelApps: Set<String> = emptySet()
+
+    val categories: StateFlow<List<String>> = categoryRepository.observeAllCategories()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.Eagerly,
+            initialValue = AppCategory.defaultCategories
+        )
+
+    val customCategories: StateFlow<List<CustomCategoryEntity>> = categoryRepository.observeCustomCategories()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.Eagerly,
+            initialValue = emptyList()
+        )
+
+    val categoryOverrides: StateFlow<Map<String, String>> = categoryRepository.observeAppCategoryOverrides()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.Eagerly,
+            initialValue = emptyMap()
+        )
 
     private val _uiState = MutableStateFlow(UsageUiState())
     val uiState: StateFlow<UsageUiState> = _uiState.asStateFlow()
+
+    init {
+        viewModelScope.launch {
+            categoryRepository.observeAppCategoryOverrides().collect { overrides ->
+                _uiState.update { current ->
+                    current.copy(
+                        apps = current.apps.map { app ->
+                            app.copy(category = overrides[app.packageName] ?: categorizeApp(app.packageName, app.name))
+                        },
+                        installedApps = current.installedApps.map { app ->
+                            app.copy(category = overrides[app.packageName] ?: categorizeApp(app.packageName, app.name))
+                        }
+                    )
+                }
+            }
+        }
+    }
 
     private val _appDetailsState = MutableStateFlow(AppDetailsUiState())
     val appDetailsState: StateFlow<AppDetailsUiState> = _appDetailsState.asStateFlow()
@@ -195,6 +240,7 @@ class UsageViewModel(
             val usage = repository.refreshUsage(force)
             val installed = repository.getInstalledApps()
             val usageDays = repository.getDailyDeviceUsage(days = 2)
+            val overrides = categoryRepository.getAppCategoryOverrides()
             val today = LocalDate.now()
             val screenTime = usageDays
                 .firstOrNull { it.date == today }
@@ -207,13 +253,14 @@ class UsageViewModel(
             val totalUsage = screenTime.coerceAtLeast(1L)
             val usedApps = usage
                 .filter { it.totalTimeInForeground > 0L }
-                .map { it.toAppUsage(totalUsage) }
+                .map { it.toAppUsage(totalUsage, overrides[it.packageName]) }
                 .sortedByDescending { it.totalUsageMillis }
             val allApps = installed
                 .map { app ->
                     val appUsage = usageByPackage[app.packageName]
-                    appUsage?.copy(appName = app.appName)?.toAppUsage(totalUsage)
-                        ?: app.toUnusedApp()
+                    val override = overrides[app.packageName]
+                    appUsage?.copy(appName = app.appName)?.toAppUsage(totalUsage, override)
+                        ?: app.toUnusedApp(override)
                 }
                 .sortedWith(
                     compareByDescending<AppUsage> {
@@ -260,9 +307,10 @@ class UsageViewModel(
         limit: Int,
     ): List<AppUsage> {
         val apps = repository.getTopAppsBetween(start, end)
+        val overrides = categoryRepository.getAppCategoryOverrides()
         val total = apps.sumOf(AppUsageInfo::totalTimeInForeground).coerceAtLeast(1L)
         return apps
-            .map { it.toAppUsage(total) }
+            .map { it.toAppUsage(total, overrides[it.packageName]) }
             .sortedByDescending { it.totalUsageMillis }
             .take(limit)
     }
@@ -270,5 +318,30 @@ class UsageViewModel(
     private fun isCurrentPeriod(startDate: LocalDate, endDate: LocalDate): Boolean {
         return _periodAppsState.value.startDate == startDate &&
             _periodAppsState.value.endDate == endDate
+    }
+
+    fun addCategory(name: String, onResult: (Result<Unit>) -> Unit = {}) {
+        viewModelScope.launch {
+            val result = categoryRepository.addCategory(name)
+            onResult(result)
+        }
+    }
+
+    fun deleteCategory(name: String) {
+        viewModelScope.launch {
+            categoryRepository.deleteCategory(name)
+        }
+    }
+
+    fun setAppCategory(packageName: String, categoryName: String) {
+        viewModelScope.launch {
+            categoryRepository.setAppCategory(packageName, categoryName)
+        }
+    }
+
+    fun resetAppCategory(packageName: String) {
+        viewModelScope.launch {
+            categoryRepository.resetAppCategory(packageName)
+        }
     }
 }

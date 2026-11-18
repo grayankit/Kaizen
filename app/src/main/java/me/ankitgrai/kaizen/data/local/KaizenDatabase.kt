@@ -13,13 +13,16 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         DailyAppUsageEntity::class,
         HourlyDeviceUsageEntity::class,
         ReelSessionEntity::class,
+        CustomCategoryEntity::class,
+        AppCategoryOverrideEntity::class,
     ],
-    version = 4,
+    version = 5,
     exportSchema = false
 )
 abstract class KaizenDatabase : RoomDatabase() {
     abstract fun usageHistoryDao(): UsageHistoryDao
     abstract fun reelDao(): ReelDao
+    abstract fun categoryDao(): CategoryDao
 
     companion object {
         @Volatile
@@ -31,7 +34,7 @@ abstract class KaizenDatabase : RoomDatabase() {
                     context.applicationContext,
                     KaizenDatabase::class.java,
                     "kaizen.db"
-                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
                     .build()
                     .also { instance = it }
             }
@@ -79,6 +82,29 @@ private val MIGRATION_3_4 = object : Migration(3, 4) {
                 `packageName` TEXT NOT NULL,
                 `swipeCount` INTEGER NOT NULL,
                 PRIMARY KEY(`date`, `packageName`)
+            )
+            """.trimIndent()
+        )
+    }
+}
+
+private val MIGRATION_4_5 = object : Migration(4, 5) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS `custom_categories` (
+                `name` TEXT NOT NULL,
+                `createdAt` INTEGER NOT NULL,
+                PRIMARY KEY(`name`)
+            )
+            """.trimIndent()
+        )
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS `app_category_overrides` (
+                `packageName` TEXT NOT NULL,
+                `categoryName` TEXT NOT NULL,
+                PRIMARY KEY(`packageName`)
             )
             """.trimIndent()
         )

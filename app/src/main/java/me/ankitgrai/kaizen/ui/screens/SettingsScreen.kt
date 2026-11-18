@@ -26,13 +26,18 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.launch
 import me.ankitgrai.kaizen.data.reel.ReelApps
 import me.ankitgrai.kaizen.data.reel.ReelSetup
 import me.ankitgrai.kaizen.settings.LocalScreenTimeSettings
 import me.ankitgrai.kaizen.settings.ScreenTimeSettings
+import me.ankitgrai.kaizen.ui.components.CreateCategoryDialog
 import me.ankitgrai.kaizen.ui.components.KaizenScrollItem
+import me.ankitgrai.kaizen.ui.components.ManageCategoriesDialog
 import me.ankitgrai.kaizen.ui.design.BackTopBar
+import me.ankitgrai.kaizen.ui.design.SettingsActionRow
 import me.ankitgrai.kaizen.ui.settings.OledRow
 import me.ankitgrai.kaizen.ui.settings.ReelAppRow
 import me.ankitgrai.kaizen.ui.settings.ReelSetupBlock
@@ -45,12 +50,14 @@ import me.ankitgrai.kaizen.ui.theme.AppThemeId
 import me.ankitgrai.kaizen.ui.theme.KaizenTheme
 import me.ankitgrai.kaizen.ui.theme.LocalThemeSettings
 import me.ankitgrai.kaizen.ui.theme.ThemeSettings
+import me.ankitgrai.kaizen.viewmodel.UsageViewModel
 import me.ankitgrai.kaizen.widget.WidgetSettings
 import me.ankitgrai.kaizen.widget.WidgetUpdater
 
 @Composable
 fun SettingsScreen(
     onBack: () -> Unit,
+    usageViewModel: UsageViewModel = viewModel(),
 ) {
     val settings = LocalThemeSettings.current ?: return
     val screenTime = LocalScreenTimeSettings.current
@@ -61,6 +68,53 @@ fun SettingsScreen(
     var widgetOpacity by remember { mutableIntStateOf(WidgetSettings.readOpacityPercent(context)) }
     var serviceOn by remember { mutableStateOf(ReelSetup.isEnabled(context)) }
     var reelChoices by remember { mutableStateOf(ReelApps.installedChoices(context)) }
+
+    val categories by usageViewModel.categories.collectAsStateWithLifecycle()
+    val customCategories by usageViewModel.customCategories.collectAsStateWithLifecycle()
+    val uiState by usageViewModel.uiState.collectAsStateWithLifecycle()
+    var showManageCategoriesDialog by remember { mutableStateOf(false) }
+    var showCreateCategoryDialog by remember { mutableStateOf(false) }
+    var createCategoryError by remember { mutableStateOf<String?>(null) }
+
+    if (showManageCategoriesDialog) {
+        val categoryAppCounts = remember(uiState.installedApps) {
+            uiState.installedApps.groupingBy { it.category }.eachCount()
+        }
+        ManageCategoriesDialog(
+            customCategories = customCategories,
+            categoryAppCounts = categoryAppCounts,
+            onDeleteCategory = { name -> usageViewModel.deleteCategory(name) },
+            onCreateCategoryClick = {
+                createCategoryError = null
+                showCreateCategoryDialog = true
+            },
+            onDismiss = { showManageCategoriesDialog = false }
+        )
+    }
+
+    if (showCreateCategoryDialog) {
+        CreateCategoryDialog(
+            errorMessage = createCategoryError,
+            onDismiss = {
+                showCreateCategoryDialog = false
+                createCategoryError = null
+            },
+            onConfirm = { name ->
+                usageViewModel.addCategory(name) { result ->
+                    result.fold(
+                        onSuccess = {
+                            showCreateCategoryDialog = false
+                            createCategoryError = null
+                        },
+                        onFailure = { error ->
+                            createCategoryError = error.message ?: "Failed to create category"
+                        }
+                    )
+                }
+            }
+        )
+    }
+
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
         serviceOn = ReelSetup.isEnabled(context)
         val choices = ReelApps.installedChoices(context)
@@ -134,6 +188,22 @@ fun SettingsScreen(
                             }
                         }
                     }
+                }
+            }
+
+            item(key = "categories-heading") {
+                SectionHeading("Categories")
+            }
+            item(key = "categories-manage") {
+                KaizenScrollItem(index = 0) {
+                    val customCount = customCategories.size
+                    val totalCount = categories.size
+                    SettingsActionRow(
+                        title = "Manage categories",
+                        subtitle = if (customCount > 0) "$customCount custom, ${totalCount - customCount} default" else "$totalCount default categories",
+                        action = "Manage",
+                        onClick = { showManageCategoriesDialog = true },
+                    )
                 }
             }
 

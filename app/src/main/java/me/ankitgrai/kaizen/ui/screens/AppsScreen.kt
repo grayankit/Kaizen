@@ -36,6 +36,7 @@ import me.ankitgrai.kaizen.domain.formatDuration
 import me.ankitgrai.kaizen.ui.components.AppSearchBar
 import me.ankitgrai.kaizen.ui.components.AppUsageRow
 import me.ankitgrai.kaizen.ui.components.CategoryFilter
+import me.ankitgrai.kaizen.ui.components.CreateCategoryDialog
 import me.ankitgrai.kaizen.ui.components.KaizenPullToRefresh
 import me.ankitgrai.kaizen.ui.components.KaizenScrollItem
 import me.ankitgrai.kaizen.ui.design.CenteredProgress
@@ -69,9 +70,38 @@ fun AppsScreen(
     var sortMenuExpanded by remember {
         mutableStateOf(false)
     }
+
+    var showCreateCategoryDialog by remember { mutableStateOf(false) }
+    var createCategoryError by remember { mutableStateOf<String?>(null) }
+
+    val categories by usageViewModel.categories.collectAsStateWithLifecycle()
     val uiState by usageViewModel.uiState.collectAsStateWithLifecycle()
     val isRefreshing by usageViewModel.isRefreshing.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
+
+    if (showCreateCategoryDialog) {
+        CreateCategoryDialog(
+            errorMessage = createCategoryError,
+            onDismiss = {
+                showCreateCategoryDialog = false
+                createCategoryError = null
+            },
+            onConfirm = { name ->
+                usageViewModel.addCategory(name) { result ->
+                    result.fold(
+                        onSuccess = {
+                            selectedCategory = name
+                            showCreateCategoryDialog = false
+                            createCategoryError = null
+                        },
+                        onFailure = { error ->
+                            createCategoryError = error.message ?: "Failed to create category"
+                        }
+                    )
+                }
+            }
+        )
+    }
 
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
         usageViewModel.refresh()
@@ -173,7 +203,12 @@ fun AppsScreen(
                 }
                 CategoryFilter(
                     selectedCategory = selectedCategory,
-                    onCategorySelected = { selectedCategory = it }
+                    onCategorySelected = { selectedCategory = it },
+                    categories = listOf("All") + categories,
+                    onAddCategoryClick = {
+                        createCategoryError = null
+                        showCreateCategoryDialog = true
+                    }
                 )
             }
         }
