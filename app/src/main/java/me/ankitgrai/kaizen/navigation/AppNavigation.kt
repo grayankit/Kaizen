@@ -127,7 +127,8 @@ fun AppNavigation(){
             }
             composable(Routes.SETTINGS) {
                 SettingsScreen(
-                    onBack = { navController.popBackStack() }
+                    onBack = { navController.popBackStack() },
+                    usageViewModel = usageViewModel,
                 )
             }
             composable(Routes.APPS) {

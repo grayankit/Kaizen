@@ -20,15 +20,17 @@ val APP_CATEGORIES = AppCategory.labels
 @Composable
 fun CategoryFilter(
     selectedCategory: String,
-    onCategorySelected:(String) -> Unit,
-    modifier: Modifier = Modifier
-){
+    onCategorySelected: (String) -> Unit,
+    modifier: Modifier = Modifier,
+    categories: List<String> = APP_CATEGORIES,
+    onAddCategoryClick: (() -> Unit)? = null,
+) {
     Row(
         modifier = modifier.fillMaxWidth()
             .horizontalScroll(rememberScrollState()),
         horizontalArrangement = Arrangement.spacedBy(8.dp)
-    ){
-        APP_CATEGORIES.forEach { category ->
+    ) {
+        categories.forEach { category ->
             val selected = category == selectedCategory
             SelectableChip(
                 label = category,
@@ -40,6 +42,20 @@ fun CategoryFilter(
                 unselectedContent = MaterialTheme.colorScheme.onSurfaceVariant,
                 fontSize = 12.sp,
                 selectedFontWeight = FontWeight.SemiBold,
+            )
+        }
+        if (onAddCategoryClick != null) {
+            SelectableChip(
+                label = "+",
+                selected = false,
+                onClick = onAddCategoryClick,
+                selectedContainer = MaterialTheme.colorScheme.primaryContainer,
+                unselectedContainer = MaterialTheme.colorScheme.surfaceContainerHigh,
+                selectedContent = MaterialTheme.colorScheme.primary,
+                unselectedContent = MaterialTheme.colorScheme.primary,
+                fontSize = 13.sp,
+                selectedFontWeight = FontWeight.Bold,
+                unselectedFontWeight = FontWeight.Bold,
             )
         }
     }

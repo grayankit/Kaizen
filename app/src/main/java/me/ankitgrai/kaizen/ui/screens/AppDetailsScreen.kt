@@ -12,7 +12,11 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.size
+import androidx.compose.ui.draw.clip
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -21,6 +25,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import me.ankitgrai.kaizen.ui.components.CreateCategoryDialog
+import me.ankitgrai.kaizen.ui.components.SelectCategoryDialog
+import me.ankitgrai.kaizen.ui.components.roundedClickable
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -66,6 +73,9 @@ fun AppDetailsScreen(
 ) {
     val uiState by usageViewModel.uiState.collectAsStateWithLifecycle()
     val detailsState by usageViewModel.appDetailsState.collectAsStateWithLifecycle()
+    val categories by usageViewModel.categories.collectAsStateWithLifecycle()
+    val overrides by usageViewModel.categoryOverrides.collectAsStateWithLifecycle()
+    val hasCustomOverride = overrides.containsKey(packageName)
 
     LaunchedEffect(packageName) {
         usageViewModel.loadAppDetails(packageName)
@@ -76,6 +86,11 @@ fun AppDetailsScreen(
         onBack = onBack,
         uiState = uiState,
         detailsState = detailsState,
+        availableCategories = categories,
+        hasCustomOverride = hasCustomOverride,
+        onAssignCategory = { category -> usageViewModel.setAppCategory(packageName, category) },
+        onResetCategory = { usageViewModel.resetAppCategory(packageName) },
+        onCreateCategory = { name, onResult -> usageViewModel.addCategory(name, onResult) },
     )
 }
 
@@ -85,6 +100,11 @@ fun AppDetailsContent(
     onBack: () -> Unit,
     uiState: UsageUiState,
     detailsState: AppDetailsUiState,
+    availableCategories: List<String> = emptyList(),
+    hasCustomOverride: Boolean = false,
+    onAssignCategory: (String) -> Unit = {},
+    onResetCategory: () -> Unit = {},
+    onCreateCategory: (String, (Result<Unit>) -> Unit) -> Unit = { _, _ -> },
 ) {
     val context = LocalContext.current
     val locale = LocalLocale.current.platformLocale
@@ -114,6 +134,57 @@ fun AppDetailsContent(
         0L
     }
 
+    var showSelectCategoryDialog by remember { mutableStateOf(false) }
+    var showCreateCategoryDialog by remember { mutableStateOf(false) }
+    var createCategoryError by remember { mutableStateOf<String?>(null) }
+
+    if (showSelectCategoryDialog) {
+        SelectCategoryDialog(
+            appName = app?.name ?: packageName,
+            currentCategory = app?.category ?: "Other",
+            availableCategories = availableCategories,
+            hasCustomOverride = hasCustomOverride,
+            onCategorySelected = { category ->
+                onAssignCategory(category)
+                showSelectCategoryDialog = false
+            },
+            onResetToDefault = {
+                onResetCategory()
+                showSelectCategoryDialog = false
+            },
+            onCreateCategoryClick = {
+                showSelectCategoryDialog = false
+                createCategoryError = null
+                showCreateCategoryDialog = true
+            },
+            onDismiss = { showSelectCategoryDialog = false }
+        )
+    }
+
+    if (showCreateCategoryDialog) {
+        CreateCategoryDialog(
+            errorMessage = createCategoryError,
+            onDismiss = {
+                showCreateCategoryDialog = false
+                createCategoryError = null
+            },
+            onConfirm = { name ->
+                onCreateCategory(name) { result ->
+                    result.fold(
+                        onSuccess = {
+                            onAssignCategory(name)
+                            showCreateCategoryDialog = false
+                            createCategoryError = null
+                        },
+                        onFailure = { error ->
+                            createCategoryError = error.message ?: "Failed to create category"
+                        }
+                    )
+                }
+            }
+        )
+    }
+
     Scaffold(
         topBar = {
             BackTopBar(
@@ -139,17 +210,36 @@ fun AppDetailsContent(
                     color = app?.color ?: MaterialTheme.colorScheme.primary,
                     size = 60.dp,
                 )
-                Column {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(
                         text = app?.name ?: packageName,
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold,
                     )
-                    Text(
-                        text = app?.category ?: "Application",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+                    Row(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(MaterialTheme.colorScheme.surfaceVariant)
+                            .roundedClickable(RoundedCornerShape(8.dp)) {
+                                showSelectCategoryDialog = true
+                            }
+                            .padding(horizontal = 8.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        Text(
+                            text = app?.category ?: "Application",
+                            style = MaterialTheme.typography.bodySmall,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                        Icon(
+                            imageVector = Icons.Outlined.Edit,
+                            contentDescription = "Edit Category",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(12.dp),
+                        )
+                    }
                 }
             }
             Card(

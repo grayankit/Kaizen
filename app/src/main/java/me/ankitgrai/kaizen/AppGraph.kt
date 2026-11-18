@@ -1,6 +1,7 @@
 package me.ankitgrai.kaizen
 
 import android.content.Context
+import me.ankitgrai.kaizen.data.category.CategoryRepository
 import me.ankitgrai.kaizen.data.usage.UsageRepository
 import me.ankitgrai.kaizen.widget.WidgetUpdater
 
@@ -13,6 +14,9 @@ object AppGraph {
     @Volatile
     private var usageRepository: UsageRepository? = null
 
+    @Volatile
+    private var categoryRepository: CategoryRepository? = null
+
     fun usageRepository(context: Context): UsageRepository {
         usageRepository?.let { return it }
         return synchronized(this) {
@@ -20,6 +24,15 @@ object AppGraph {
                 context.applicationContext,
                 onUsageChanged = WidgetUpdater::publish,
             ).also { usageRepository = it }
+        }
+    }
+
+    fun categoryRepository(context: Context): CategoryRepository {
+        categoryRepository?.let { return it }
+        return synchronized(this) {
+            categoryRepository ?: CategoryRepository(
+                context.applicationContext
+            ).also { categoryRepository = it }
         }
     }
 }

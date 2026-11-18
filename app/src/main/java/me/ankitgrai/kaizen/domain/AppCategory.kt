@@ -12,6 +12,7 @@ enum class AppCategory(val label: String) {
 
     companion object {
         val labels: List<String> = entries.map { it.label }
+        val defaultCategories: List<String> = entries.filter { it != All }.map { it.label }
     }
 }
 

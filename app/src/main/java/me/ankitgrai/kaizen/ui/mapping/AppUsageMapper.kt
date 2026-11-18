@@ -19,7 +19,10 @@ private val fallbackColors = listOf(
 fun appFallbackColor(packageName: String): Color =
     fallbackColors[(packageName.hashCode() and Int.MAX_VALUE) % fallbackColors.size]
 
-fun AppUsageInfo.toAppUsage(totalDailyUsage: Long): AppUsage {
+fun AppUsageInfo.toAppUsage(
+    totalDailyUsage: Long,
+    categoryOverride: String? = null,
+): AppUsage {
     val progress = if (totalDailyUsage > 0L) {
         totalTimeInForeground.toFloat() / totalDailyUsage
     } else {
@@ -27,7 +30,7 @@ fun AppUsageInfo.toAppUsage(totalDailyUsage: Long): AppUsage {
     }
     return AppUsage(
         name = appName,
-        category = categorizeApp(packageName, appName),
+        category = categoryOverride ?: categorizeApp(packageName, appName),
         duration = formatDuration(totalTimeInForeground),
         initials = initials(appName),
         color = appFallbackColor(packageName),
@@ -37,9 +40,9 @@ fun AppUsageInfo.toAppUsage(totalDailyUsage: Long): AppUsage {
     )
 }
 
-fun InstalledAppInfo.toUnusedApp(): AppUsage = AppUsage(
+fun InstalledAppInfo.toUnusedApp(categoryOverride: String? = null): AppUsage = AppUsage(
     name = appName,
-    category = categorizeApp(packageName, appName),
+    category = categoryOverride ?: categorizeApp(packageName, appName),
     duration = formatDuration(0L),
     initials = initials(appName),
     color = appFallbackColor(packageName),
