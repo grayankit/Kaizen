@@ -38,6 +38,7 @@ import me.ankitgrai.kaizen.ui.components.FloatingNavigationBar
 import me.ankitgrai.kaizen.ui.screens.AppDetailsScreen
 import me.ankitgrai.kaizen.ui.screens.AppsScreen
 import me.ankitgrai.kaizen.ui.screens.HistoryScreen
+import me.ankitgrai.kaizen.ui.screens.ManageCategoriesScreen
 import me.ankitgrai.kaizen.ui.screens.OverviewScreen
 import me.ankitgrai.kaizen.ui.screens.ReelDetailScreen
 import me.ankitgrai.kaizen.ui.screens.SettingsScreen
@@ -53,6 +54,7 @@ private object Routes{
     const val APP_DETAILS = "app_details/{packageName}"
     const val SETTINGS = "settings"
     const val REELS = "reels"
+    const val MANAGE_CATEGORIES = "manage_categories"
 }
 
 @Composable
@@ -72,6 +74,7 @@ fun AppNavigation(){
             && currentRoute != Routes.SETTINGS
             && currentRoute != Routes.SPLASH
             && currentRoute != Routes.REELS
+            && currentRoute != Routes.MANAGE_CATEGORIES
     Scaffold(
         containerColor = androidx.compose.material3.MaterialTheme.colorScheme.background,
         contentWindowInsets = WindowInsets.safeDrawing.exclude(WindowInsets.navigationBars)
@@ -127,6 +130,15 @@ fun AppNavigation(){
             }
             composable(Routes.SETTINGS) {
                 SettingsScreen(
+                    onBack = { navController.popBackStack() },
+                    onManageCategories = {
+                        navController.navigate(Routes.MANAGE_CATEGORIES)
+                    },
+                    usageViewModel = usageViewModel,
+                )
+            }
+            composable(Routes.MANAGE_CATEGORIES) {
+                ManageCategoriesScreen(
                     onBack = { navController.popBackStack() },
                     usageViewModel = usageViewModel,
                 )
@@ -228,6 +240,7 @@ private fun tabExit(
     ) + fadeOut(tween(160))
 }
 
+@RequiresApi(Build.VERSION_CODES.S)
 @Preview
 @Composable
 private fun AppNavigationPreview() {
