@@ -57,6 +57,7 @@ import me.ankitgrai.kaizen.widget.WidgetUpdater
 @Composable
 fun SettingsScreen(
     onBack: () -> Unit,
+    onManageCategories: () -> Unit = {},
     usageViewModel: UsageViewModel = viewModel(),
 ) {
     val settings = LocalThemeSettings.current ?: return
@@ -71,49 +72,6 @@ fun SettingsScreen(
 
     val categories by usageViewModel.categories.collectAsStateWithLifecycle()
     val customCategories by usageViewModel.customCategories.collectAsStateWithLifecycle()
-    val uiState by usageViewModel.uiState.collectAsStateWithLifecycle()
-    var showManageCategoriesDialog by remember { mutableStateOf(false) }
-    var showCreateCategoryDialog by remember { mutableStateOf(false) }
-    var createCategoryError by remember { mutableStateOf<String?>(null) }
-
-    if (showManageCategoriesDialog) {
-        val categoryAppCounts = remember(uiState.installedApps) {
-            uiState.installedApps.groupingBy { it.category }.eachCount()
-        }
-        ManageCategoriesDialog(
-            customCategories = customCategories,
-            categoryAppCounts = categoryAppCounts,
-            onDeleteCategory = { name -> usageViewModel.deleteCategory(name) },
-            onCreateCategoryClick = {
-                createCategoryError = null
-                showCreateCategoryDialog = true
-            },
-            onDismiss = { showManageCategoriesDialog = false }
-        )
-    }
-
-    if (showCreateCategoryDialog) {
-        CreateCategoryDialog(
-            errorMessage = createCategoryError,
-            onDismiss = {
-                showCreateCategoryDialog = false
-                createCategoryError = null
-            },
-            onConfirm = { name ->
-                usageViewModel.addCategory(name) { result ->
-                    result.fold(
-                        onSuccess = {
-                            showCreateCategoryDialog = false
-                            createCategoryError = null
-                        },
-                        onFailure = { error ->
-                            createCategoryError = error.message ?: "Failed to create category"
-                        }
-                    )
-                }
-            }
-        )
-    }
 
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
         serviceOn = ReelSetup.isEnabled(context)
@@ -202,7 +160,7 @@ fun SettingsScreen(
                         title = "Manage categories",
                         subtitle = if (customCount > 0) "$customCount custom, ${totalCount - customCount} default" else "$totalCount default categories",
                         action = "Manage",
-                        onClick = { showManageCategoriesDialog = true },
+                        onClick = onManageCategories,
                     )
                 }
             }
