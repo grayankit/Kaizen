@@ -1,5 +1,10 @@
 package me.ankitgrai.kaizen.ui.screens
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -135,6 +140,32 @@ fun AppsScreen(
 
     }
 
+    val categoryTotalMillis = remember(uiState.installedApps, selectedCategory) {
+        if (selectedCategory == "All") {
+            uiState.totalUsageMillis
+        } else {
+            uiState.installedApps
+                .filter { it.category.equals(selectedCategory, ignoreCase = true) }
+                .sumOf { it.totalUsageMillis }
+        }
+    }
+
+    val categoryAppsCount = remember(uiState.installedApps, selectedCategory) {
+        if (selectedCategory == "All") {
+            uiState.installedApps.size
+        } else {
+            uiState.installedApps.count { it.category.equals(selectedCategory, ignoreCase = true) }
+        }
+    }
+
+    val categoryPercentage = remember(categoryTotalMillis, uiState.totalUsageMillis) {
+        if (uiState.totalUsageMillis > 0L) {
+            ((categoryTotalMillis.toDouble() / uiState.totalUsageMillis) * 100).toInt().coerceIn(0, 100)
+        } else {
+            0
+        }
+    }
+
     KaizenPullToRefresh(
         isRefreshing = isRefreshing,
         onRefresh = { scope.launch { usageViewModel.refreshAll() } },
@@ -210,6 +241,18 @@ fun AppsScreen(
                         showCreateCategoryDialog = true
                     }
                 )
+                AnimatedVisibility(
+                    visible = selectedCategory != "All",
+                    enter = fadeIn() + expandVertically(),
+                    exit = fadeOut() + shrinkVertically()
+                ) {
+                    CategoryUsageSummary(
+                        category = selectedCategory,
+                        totalUsageMillis = categoryTotalMillis,
+                        appCount = categoryAppsCount,
+                        percentageOfTotal = categoryPercentage
+                    )
+                }
             }
         }
 
@@ -368,10 +411,67 @@ private fun usageComparison(
         else -> UsageComparison("No change", UsageChangeDirection.None)
     }
 }
+@Composable
+private fun CategoryUsageSummary(
+    category: String,
+    totalUsageMillis: Long,
+    appCount: Int,
+    percentageOfTotal: Int,
+    modifier: Modifier = Modifier
+) {
+    val formattedDuration = formatDuration(totalUsageMillis, alwaysShowHours = true)
+    val appCountText = if (appCount == 1) "1 app" else "$appCount apps"
+
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(top = 4.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        Text(
+            text = "TOTAL FOR ${category.uppercase()}",
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            fontSize = 10.sp,
+            fontWeight = FontWeight.SemiBold,
+            letterSpacing = 0.5.sp
+        )
+        Row(
+            verticalAlignment = Alignment.Bottom,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(
+                text = formattedDuration,
+                color = MaterialTheme.colorScheme.onSurface,
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold
+            )
+            Text(
+                text = "• $appCountText • $percentageOfTotal% of today",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontSize = 12.sp,
+                modifier = Modifier.padding(bottom = 2.dp)
+            )
+        }
+    }
+}
+
 @Preview(showBackground = true)
 @Composable
 private fun AppsScreenPreview(){
     KaizenTheme(darkTheme = true) {
         AppsScreen()
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+private fun CategoryUsageSummaryPreview() {
+    KaizenTheme(darkTheme = true) {
+        CategoryUsageSummary(
+            category = "Social",
+            totalUsageMillis = 8_100_000L,
+            appCount = 3,
+            percentageOfTotal = 45
+        )
     }
 }
