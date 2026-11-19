@@ -240,6 +240,7 @@ private fun tabExit(
     ) + fadeOut(tween(160))
 }
 
+@RequiresApi(Build.VERSION_CODES.S)
 @Preview
 @Composable
 private fun AppNavigationPreview() {
